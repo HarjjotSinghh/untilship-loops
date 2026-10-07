@@ -151,6 +151,7 @@ also works in CI.
 All three hooks run with the agent's own filesystem permissions. An agent that is determined
 to cheat can edit files the hook reads. UntilShip makes the common shortcuts fail the lap
 (editing the loop, the hook config, test-runner config, coverage thresholds, lockfiles,
-checklists and briefs it was given; adding `.skip`/`.only`/`@ts-ignore`) and records
-everything in the run report, but it is a guard against an over-eager model, not a sandbox.
-For adversarial settings, run the check in CI on a clean checkout.
+checklists and briefs it was given, existing test files, `package.json` scripts; adding
+`.skip`/`.only`/`@ts-ignore` and similar markers) and records everything in the run report,
+but it is a guard against an over-eager model, not a sandbox. For adversarial settings, run
+the check in CI on a clean checkout. Every guard, and what is not caught: [GUARDS.md](GUARDS.md).

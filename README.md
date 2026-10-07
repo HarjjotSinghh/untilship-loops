@@ -4,6 +4,8 @@ Agent loops for **Claude Code, Codex and Cursor** that keep working until the jo
 actually done. A loop's stop condition is checked by a script in a hook, outside the model.
 The agent cannot declare success; it can only make the check pass.
 
+The paid library launches November 2026. The first 200 on the waitlist get 50% off for life: https://untilship.com/?ref=gh
+
 ```text
 you: /untilship-dependency-upgrade   (package=react, target=^19)
 agent: bumps react, fixes things, ends its turn
@@ -24,8 +26,10 @@ A loop is a markdown file (`loops/<name>/loop.md`) with:
   panel-scored loops a scoring script that applies a rubric threshold.
 - **Max laps** (default 8): a lap is one check after the agent ends its turn. Hitting the
   limit stops the loop as `blocked` with a blocker report.
-- **Protections**: files the agent may not touch during the run (`protect:`) and shortcuts it
-  may not add (`forbid:`).
+- **Guards**: files the agent may not touch (`protect:`), files it may not edit but may add to
+  (`protect_existing:`, e.g. your existing tests), JSON values it may not change
+  (`protect_json:`, e.g. `package.json#scripts`) and shortcuts it may not add (`forbid:`,
+  e.g. `.skip(`, `@ts-ignore`). Every guard, and what is not caught: [docs/GUARDS.md](docs/GUARDS.md).
 - **Report**: every run writes `.untilship/runs/<run-id>/report.md` and `run.json`.
 
 ```yaml
@@ -40,7 +44,9 @@ check:                   # all must exit 0, in order
 metric: 'ACCEPTANCE: (\d+)/'   # optional regex, recorded per lap
 max_laps: 8
 protect: [tsconfig*.json, vitest.config.*]
-forbid: ['\b(it|test)\.skip\(', '@ts-ignore']
+protect_existing: ['@tests']          # existing tests frozen, new tests allowed
+protect_json: ['package.json#scripts']
+forbid: ['\b(?:it|test|describe)\.(?:skip|only)\b', '@ts-ignore']
 ---
 ```
 
@@ -57,13 +63,15 @@ Every loop script is zero-dependency Node (>= 18.17).
 
 ## Install
 
-From a clone of this repo (the npm package will expose the same commands as `npx untilship`):
+Run in your repo (or pass `--dir /path/to/your/repo`):
 
 ```bash
-node bin/untilship pull --agent claude --dir /path/to/your/repo          # all free loops
-node bin/untilship pull dependency-upgrade --agent codex --dir /path/to/your/repo
-node bin/untilship pull aeo-setup --agent cursor --dir /path/to/your/repo
+npx untilship pull --agent claude                      # all free loops
+npx untilship pull dependency-upgrade --agent codex
+npx untilship pull aeo-setup --agent cursor
 ```
+
+From a clone of this repo, `node bin/untilship ...` does the same.
 
 What gets written into your repo:
 
@@ -77,6 +85,26 @@ Plus, for all agents, `.untilship/bin/untilship-check.cjs` (the enforcer) and
 `.untilship/loops/<loop>/` (the canonical loop and its scripts). Prefer copying by hand?
 `dist/<agent>/` mirrors a project root; copy it and merge the `*.untilship.json` hook snippet
 into your hook config.
+
+### Uninstall
+
+```bash
+npx untilship remove                    # every agent
+npx untilship remove --agent cursor     # one agent
+npx untilship remove --keep-reports     # keep .untilship/runs/ (the run reports)
+```
+
+`remove` deletes the `untilship-*` skill folders, takes only UntilShip's entry out of the
+hook config (your other hooks and settings stay; the file is deleted only if UntilShip
+created it and nothing else is left), removes the marked UntilShip section from `AGENTS.md`
+(the rest stays), and deletes `.untilship/`. It prints every path it removed. Running it
+twice is safe. When another agent still uses UntilShip, the shared `.untilship/` and
+`AGENTS.md` section stay until that agent is removed too.
+
+### Platforms
+
+Tested on macOS and Linux. Windows is untested: the hooks and loop scripts are plain Node
+(>= 18.17), so they should run, but nobody has checked yet.
 
 ## How enforcement works
 
@@ -103,6 +131,8 @@ Default protected files when a loop does not set `protect:`: test-runner config
 (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `.mocharc*`, `pytest.ini`, ...),
 coverage thresholds (`.nycrc*`, `.c8rc*`, `codecov.yml`, `.coveragerc`) and lockfiles.
 Always protected: `.untilship/bin/`, `.untilship/loops/`, and the three agents' hook configs.
+The full list per loop, the forbidden markers by language, and what is **not** caught (weak
+tests, cheating inside the code, restarting a run): [docs/GUARDS.md](docs/GUARDS.md).
 
 Commands (`node .untilship/bin/untilship-check.cjs <cmd>`):
 
@@ -136,7 +166,8 @@ Exit codes: 0 passed, 3 blocked, 2 usage error.
   whether the `cursor-agent` CLI runs project hooks is not documented. Use `untilship run`
   there.
 - **Hooks run with the agent's permissions.** UntilShip catches the usual shortcuts (editing
-  the checks, thresholds, test config, the loop itself; adding `.skip`, `@ts-ignore`) and logs
+  the checks, thresholds, test config, existing tests, `package.json` scripts, the loop
+  itself; adding `.skip`, `@ts-ignore` and the like, see [docs/GUARDS.md](docs/GUARDS.md)) and logs
   everything, but an agent determined to cheat could edit what the hook reads. It is a guard
   against an over-eager model, not a security boundary. For adversarial cases, run the check
   in CI.
@@ -157,13 +188,13 @@ Exit codes: 0 passed, 3 blocked, 2 usage error.
 
 ```text
 bin/untilship-check        the enforcer (zero-dep CommonJS; installed as .untilship/bin/untilship-check.cjs)
-bin/untilship              CLI: list, pull, run, and passthrough to untilship-check
+bin/untilship              CLI: list, pull, remove, run, and passthrough to untilship-check
 loops/<loop>/              canonical loop.md + its check scripts
 scripts/build-adapters.mjs generates dist/<agent>/ from loops/ (deterministic)
 dist/<agent>/              ready-to-copy adapters for claude, codex, cursor
 examples/<loop>/           a tiny fixture repo per loop, with solution/ overlays (used by tests)
 test/                      node:test suites
-docs/                      AGENT-HOOKS.md, sample reports
+docs/                      GUARDS.md, AGENT-HOOKS.md, sample reports
 ```
 
 ## Develop
