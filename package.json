@@ -1,6 +1,6 @@
 {
   "name": "untilship",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent loops for Claude Code, Codex and Cursor that keep working until a stop condition, checked outside the model, passes.",
   "license": "MIT",
   "bin": {

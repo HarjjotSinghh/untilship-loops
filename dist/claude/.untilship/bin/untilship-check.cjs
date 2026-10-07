@@ -19,7 +19,7 @@ const path = require('path');
 const crypto = require('crypto');
 const cp = require('child_process');
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const STATE_DIR = '.untilship';
 const DEFAULT_MAX_LAPS = 8;
 const DEFAULT_TIMEOUT_S = 600;
