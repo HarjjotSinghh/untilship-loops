@@ -50,6 +50,27 @@ const CORE_PROTECT = [
 
 const DEFAULT_FORBID_IN = ['**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,py,rb,go,rs,java,kt,swift,vue,svelte,php,cs}'];
 
+/**
+ * Never scanned for forbidden patterns, whatever `forbid_in` says: build output, coverage
+ * output, vendored and minified code (on top of node_modules/.git/etc., which are never walked,
+ * and .untilship/). A loop can exclude more with `!glob` entries in `forbid_in`.
+ */
+const FORBID_EXCLUDE = [
+  '**/{dist,build,out,coverage,vendor,.svelte-kit,.output,.vercel,storybook-static,htmlcov}/**',
+  '**/*.min.{js,cjs,mjs}',
+];
+
+/**
+ * `@tests` in `protect:` / `protect_existing:` expands to these: test files and test
+ * directories across the common JS/TS, Python, Go, Ruby, JVM, .NET and Swift layouts.
+ */
+const TEST_GLOBS = [
+  '**/{test,tests,__tests__,spec,specs,e2e,__snapshots__}/**',
+  '**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}',
+  '**/{test_*.py,*_test.py,*_test.go,*_spec.rb,*_test.rb}',
+  '**/{*Test,*Tests}.{java,kt,cs,swift}',
+];
+
 const SKIP_DIRS = new Set([
   '.git', 'node_modules', '.next', '.nuxt', '.turbo', '.cache', '.parcel-cache', '.venv', 'venv',
   '__pycache__', '.pytest_cache', '.mypy_cache', 'target', '.gradle', '.idea', '.vscode',
@@ -213,21 +234,110 @@ function snapshotProtected(root, globs) {
   return snap;
 }
 
-function diffSnapshots(before, after) {
+/**
+ * Compare two snapshots. With `allowAdded` (protect_existing), files that did not exist at
+ * the start may appear freely; only edits to and deletions of baseline files count.
+ */
+function diffSnapshots(before, after, opts = {}) {
   const changed = [];
   for (const [f, h] of Object.entries(before)) {
     if (!(f in after)) changed.push({ file: f, change: 'deleted' });
     else if (after[f] !== h) changed.push({ file: f, change: 'modified' });
   }
-  for (const f of Object.keys(after)) if (!(f in before)) changed.push({ file: f, change: 'added' });
+  if (!opts.allowAdded) for (const f of Object.keys(after)) if (!(f in before)) changed.push({ file: f, change: 'added' });
   return changed.sort((a, b) => a.file.localeCompare(b.file));
+}
+
+/* protect_json: "file.json#a.b" freezes one value (adding it counts too);
+ * "file.json#a.b.*" freezes each key that exists under a.b at the start, new keys allowed. */
+function parseJsonSpec(spec) {
+  const s = String(spec);
+  const i = s.indexOf('#');
+  if (i < 1 || i === s.length - 1) throw new Error(`protect_json entry "${s}" must look like file.json#key, file.json#key.sub or file.json#key.*`);
+  let p = s.slice(i + 1);
+  let children = false;
+  if (p === '*') { children = true; p = ''; } else if (p.endsWith('.*')) { children = true; p = p.slice(0, -2); }
+  return { file: s.slice(0, i), path: p ? p.split('.') : [], children, label: s.slice(0, i) + (p ? '#' + p : '') };
+}
+
+const isPlainObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+function canon(v) {
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (isPlainObj(v)) return '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  return JSON.stringify(v);
+}
+
+function readJsonValue(root, spec) {
+  const s = parseJsonSpec(spec);
+  let data;
+  try { data = JSON.parse(fs.readFileSync(path.join(root, s.file), 'utf8')); } catch (e) {
+    return { present: false, unreadable: e.code !== 'ENOENT' };
+  }
+  let v = data;
+  for (const k of s.path) {
+    if (!isPlainObj(v) || !Object.prototype.hasOwnProperty.call(v, k)) return { present: false };
+    v = v[k];
+  }
+  return { present: true, value: v };
+}
+
+function snapshotJson(root, specs) {
+  const snap = {};
+  for (const spec of specs) snap[spec] = readJsonValue(root, spec);
+  return snap;
+}
+
+function diffJson(root, specs, before) {
+  const changed = [];
+  for (const spec of specs) {
+    const s = parseJsonSpec(spec);
+    const b = before[spec] || { present: false };
+    const cur = readJsonValue(root, spec);
+    if (cur.unreadable && b.present) { changed.push({ file: s.file, change: 'unreadable JSON' }); continue; }
+    if (!s.children) {
+      if (!b.present && cur.present) changed.push({ file: s.label, change: 'added' });
+      else if (b.present && !cur.present) changed.push({ file: s.label, change: 'deleted' });
+      else if (b.present && canon(b.value) !== canon(cur.value)) changed.push({ file: s.label, change: 'modified' });
+      continue;
+    }
+    if (!b.present || !isPlainObj(b.value)) continue;
+    const now = cur.present && isPlainObj(cur.value) ? cur.value : {};
+    const prefix = s.file + '#' + (s.path.length ? s.path.join('.') + '.' : '');
+    for (const k of Object.keys(b.value)) {
+      if (!Object.prototype.hasOwnProperty.call(now, k)) changed.push({ file: prefix + k, change: 'deleted' });
+      else if (canon(b.value[k]) !== canon(now[k])) changed.push({ file: prefix + k, change: 'modified' });
+    }
+  }
+  return changed;
+}
+
+/** Every protected-file / protected-value change since the start of the run. */
+function tamperedSince(root, run) {
+  const cfg = run.config;
+  const base = run.baseline;
+  const out = diffSnapshots(base.protected, snapshotProtected(root, cfg.protect));
+  if (cfg.protectExisting && cfg.protectExisting.length) {
+    const seen = new Set(out.map((t) => t.file));
+    for (const t of diffSnapshots(base.protectedExisting || {}, snapshotProtected(root, cfg.protectExisting), { allowAdded: true })) {
+      if (!seen.has(t.file)) out.push(t);
+    }
+  }
+  if (cfg.protectJson && cfg.protectJson.length) out.push(...diffJson(root, cfg.protectJson, base.protectedJson || {}));
+  return out.sort((a, b) => a.file.localeCompare(b.file));
+}
+
+function splitForbidIn(inGlobs) {
+  const inc = [];
+  const exc = FORBID_EXCLUDE.slice();
+  for (const g of inGlobs) (String(g).startsWith('!') ? exc.push(String(g).slice(1)) : inc.push(String(g)));
+  return { inc: inc.map(globToRegex), exc: exc.map(globToRegex) };
 }
 
 function countForbidden(root, patterns, inGlobs) {
   if (!patterns.length) return {};
   const res = patterns.map((p) => new RegExp(p, 'g'));
-  const globs = inGlobs.map(globToRegex);
-  const files = walk(root, { skipRel: [STATE_DIR] }).filter((f) => globs.some((g) => g.test(f)));
+  const { inc, exc } = splitForbidIn(inGlobs);
+  const files = walk(root, { skipRel: [STATE_DIR] }).filter((f) => inc.some((g) => g.test(f)) && !exc.some((g) => g.test(f)));
   const counts = {};
   for (const f of files) {
     let text;
@@ -314,6 +424,8 @@ function loadLoop(loopFile) {
     timeoutS: Number(data.check_timeout || DEFAULT_TIMEOUT_S),
     stallLimit: data.stall_limit === undefined ? DEFAULT_STALL_LIMIT : Number(data.stall_limit),
     protect: data.protect === undefined ? DEFAULT_PROTECT.slice() : asList(data.protect),
+    protectExisting: asList(data.protect_existing),
+    protectJson: asList(data.protect_json),
     forbid: asList(data.forbid),
     forbidIn: data.forbid_in === undefined ? DEFAULT_FORBID_IN.slice() : asList(data.forbid_in),
     vars: (data.vars && typeof data.vars === 'object' && !Array.isArray(data.vars)) ? data.vars : {},
@@ -408,14 +520,22 @@ function start(root, ref, opts = {}) {
   const checks = loop.checks.map((c) => interpolate(c, vars)); // validates every {{var}} now, not mid-run
   const absent = loop.requireFiles.map((f) => interpolate(f, vars)).filter((f) => !fs.existsSync(path.join(root, f)));
   if (absent.length) throw new Error(`loop "${loop.name}" needs ${absent.join(', ')} before it can start (see the loop's step 0)`);
+  // Entries are interpolated; an entry that interpolates to "" is dropped (so a var can switch
+  // a guard off at start, e.g. --set protect_tests=), and "@tests" expands to TEST_GLOBS.
+  const globList = (list) => list.map((p) => interpolate(p, vars).trim()).filter(Boolean)
+    .flatMap((p) => (p === '@tests' ? TEST_GLOBS : [p]));
   const protectGlobs = Array.from(new Set([
-    ...CORE_PROTECT, ...loop.protect.map((p) => interpolate(p, vars)),
+    ...CORE_PROTECT, ...globList(loop.protect),
     ...(loopDir.startsWith('..') ? [] : [loopDir + '/**']),
   ]));
+  const protectExisting = Array.from(new Set(globList(loop.protectExisting)));
+  const protectJson = Array.from(new Set(loop.protectJson.map((p) => interpolate(p, vars).trim()).filter(Boolean)));
+  protectJson.forEach(parseJsonSpec); // validate now, not mid-run
   const config = {
     name: loop.name, title: loop.title, tier: loop.tier, type: loop.type, stopWhen: loop.stopWhen,
     checks, metric: loop.metric, metricName: loop.metricName, maxLaps: loop.maxLaps, timeoutS: loop.timeoutS,
-    stallLimit: loop.stallLimit, protect: protectGlobs, forbid: loop.forbid, forbidIn: loop.forbidIn, vars,
+    stallLimit: loop.stallLimit, protect: protectGlobs, protectExisting, protectJson,
+    forbid: loop.forbid, forbidIn: loop.forbidIn, vars,
     loopFile: rel(root, loopFile), loopSha: hashFile(loopFile),
   };
   const run = {
@@ -423,6 +543,8 @@ function start(root, ref, opts = {}) {
     startedAt: new Date().toISOString(), endedAt: null, config,
     baseline: {
       protected: snapshotProtected(root, protectGlobs),
+      protectedExisting: protectExisting.length ? snapshotProtected(root, protectExisting) : {},
+      protectedJson: snapshotJson(root, protectJson),
       forbidden: countForbidden(root, loop.forbid, loop.forbidIn),
       fingerprint: workingTreeFingerprint(root),
     },
@@ -522,7 +644,7 @@ function evaluate(root, opts = {}) {
     const loopAbs = path.join(root, cfg.loopFile);
     if (hashFile(loopAbs) !== cfg.loopSha) integrity.push(`${cfg.loopFile} was edited during the run`);
 
-    const tampered = diffSnapshots(run.baseline.protected, snapshotProtected(root, cfg.protect));
+    const tampered = tamperedSince(root, run);
     const forbidden = forbiddenIncreases(run.baseline.forbidden || {}, countForbidden(root, cfg.forbid, cfg.forbidIn));
     const fingerprint = workingTreeFingerprint(root);
     const prev = run.laps[run.laps.length - 1];
@@ -623,6 +745,8 @@ function reportHeader(run) {
     `- Check: ${c.checks.map((x) => '`' + x + '`').join(' then ')}`,
     `- Max laps: ${c.maxLaps}`,
     `- Protected: ${Object.keys(run.baseline.protected).length} file(s) matching ${c.protect.length} pattern(s)`,
+    c.protectExisting && c.protectExisting.length ? `- Protected as of start (new files allowed): ${Object.keys(run.baseline.protectedExisting || {}).length} file(s) matching ${c.protectExisting.length} pattern(s)` : null,
+    c.protectJson && c.protectJson.length ? `- Protected JSON values: ${c.protectJson.map((x) => '`' + x + '`').join(', ')}` : null,
     c.forbid.length ? `- Forbidden in diffs: ${c.forbid.map((x) => '`/' + x + '/`').join(', ')}` : null,
     '',
     '## Laps',
@@ -717,8 +841,9 @@ function peek(root) {
   if (!fs.existsSync(P.active(root))) return null;
   const { run } = getActive(root);
   const res = runChecks(root, run);
-  const tampered = diffSnapshots(run.baseline.protected, snapshotProtected(root, run.config.protect));
-  return { exitCode: res.exitCode, metric: res.metric, failedCommand: res.failedCommand, tampered, output: [res.stdoutTail, res.stderrTail].join('\n').trim() };
+  const tampered = tamperedSince(root, run);
+  const forbidden = forbiddenIncreases(run.baseline.forbidden || {}, countForbidden(root, run.config.forbid, run.config.forbidIn));
+  return { exitCode: res.exitCode, metric: res.metric, failedCommand: res.failedCommand, tampered, forbidden, output: [res.stdoutTail, res.stderrTail].join('\n').trim() };
 }
 
 /* ------------------------------------------------------------------ */
@@ -838,8 +963,11 @@ function main(argv) {
     if (cmd === 'peek') {
       const r = peek(root);
       if (!r) { process.stdout.write('UntilShip: no active loop.\n'); return 0; }
-      process.stdout.write(`${r.exitCode === 0 && !r.tampered.length ? 'WOULD PASS' : 'WOULD FAIL'} (exit ${r.exitCode}${r.metric !== null ? `, metric=${r.metric}` : ''})\n${r.tampered.length ? 'Protected files changed: ' + r.tampered.map((t) => t.file).join(', ') + '\n' : ''}${r.output}\n`);
-      return r.exitCode === 0 && !r.tampered.length ? 0 : 1;
+      const ok = r.exitCode === 0 && !r.tampered.length && !r.forbidden.length;
+      process.stdout.write(`${ok ? 'WOULD PASS' : 'WOULD FAIL'} (exit ${r.exitCode}${r.metric !== null ? `, metric=${r.metric}` : ''})\n` +
+        `${r.tampered.length ? 'Protected files changed: ' + r.tampered.map((t) => `${t.file} (${t.change})`).join(', ') + '\n' : ''}` +
+        `${r.forbidden.length ? 'Forbidden shortcuts added: ' + r.forbidden.map((f) => `${f.file} /${f.pattern}/`).join(', ') + '\n' : ''}${r.output}\n`);
+      return ok ? 0 : 1;
     }
     if (cmd === 'abort') {
       const r = abort(root, args._.slice(1).join(' ') || 'aborted by user');
@@ -861,9 +989,9 @@ function main(argv) {
 }
 
 module.exports = {
-  VERSION, DEFAULT_PROTECT, CORE_PROTECT, parseFrontmatter, parseYamlSubset, globToRegex, loadLoop, interpolate,
-  start, evaluate, status, abort, peek, respond, detectAgent, findRoot, snapshotProtected, diffSnapshots,
-  workingTreeFingerprint, main,
+  VERSION, DEFAULT_PROTECT, CORE_PROTECT, FORBID_EXCLUDE, TEST_GLOBS, parseFrontmatter, parseYamlSubset, globToRegex,
+  loadLoop, interpolate, start, evaluate, status, abort, peek, respond, detectAgent, findRoot, snapshotProtected,
+  diffSnapshots, diffJson, parseJsonSpec, countForbidden, forbiddenIncreases, workingTreeFingerprint, main,
 };
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
