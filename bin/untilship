@@ -31,6 +31,8 @@ const INSTALL_RECORD = '.untilship/install.json';
 const BLOCK_RE = /<!-- untilship:start -->[\s\S]*?<!-- untilship:end -->\n?/;
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const canon = (v) => (Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
+  : isObj(v) ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v));
 
 function parseArgs(argv) {
   const a = { _: [], set: {} };
@@ -130,7 +132,8 @@ function pull(args) {
     if (!isObj(existingHook.hooks)) added.push('hooks');
     if (!isObj(existingHook.hooks) || !(ev in existingHook.hooks)) added.push(`hooks.${ev}`);
     if (agent === 'cursor' && !('version' in existingHook)) added.push('version');
-    record.files[a.hook.mergeInto] = { created: hookRaw === null, added };
+    // the original text lets `remove` restore the file byte for byte when nothing else changed
+    record.files[a.hook.mergeInto] = hookRaw === null ? { created: true, added } : { created: false, added, original: hookRaw };
   }
 
   for (const f of a.common) {
@@ -235,7 +238,9 @@ function remove(args) {
       fs.rmSync(abs, { force: true });
       removed.push(target);
     } else {
-      fs.writeFileSync(abs, stringifyLike(res.obj, raw));
+      let original = null;
+      try { if (rec && typeof rec.original === 'string' && canon(JSON.parse(rec.original)) === canon(res.obj)) original = rec.original; } catch { /* use res.obj */ }
+      fs.writeFileSync(abs, original !== null ? original : stringifyLike(res.obj, raw));
       removed.push(`${target} (UntilShip Stop hook entry; other hooks and keys kept)`);
     }
     if (record) delete record.files[target];

@@ -98,7 +98,8 @@ npx untilship remove --keep-reports     # keep .untilship/runs/ (the run reports
 hook config (your other hooks and settings stay; the file is deleted only if UntilShip
 created it and nothing else is left), removes the marked UntilShip section from `AGENTS.md`
 (the rest stays), and deletes `.untilship/`. It prints every path it removed. Running it
-twice is safe. When another agent still uses UntilShip, the shared `.untilship/` and
+twice is safe. `pull` keeps a small record (`.untilship/install.json`) of what it created, so
+`remove` can put a hook config you have not touched since back exactly as it was. When another agent still uses UntilShip, the shared `.untilship/` and
 `AGENTS.md` section stay until that agent is removed too.
 
 ### Platforms

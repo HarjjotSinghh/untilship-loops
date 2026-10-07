@@ -40,7 +40,8 @@ describe('untilship remove', () => {
   test('claude: repo is byte-for-byte back to its original state; foreign hooks survive; second run is a no-op', () => {
     const d = tmp();
     mkdirSync(join(d, '.claude'));
-    writeFileSync(join(d, '.claude', 'settings.json'), JSON.stringify(FOREIGN_CLAUDE, null, 2) + '\n');
+    // hand-formatted (inline arrays): pull reformats it, remove must still restore it byte for byte
+    writeFileSync(join(d, '.claude', 'settings.json'), JSON.stringify(FOREIGN_CLAUDE, null, 2).replace('[\n      "Bash(npm test)"\n    ]', '["Bash(npm test)"]') + '\n');
     writeFileSync(join(d, 'README.md'), '# app\n');
     const before = tree(d);
     cli(d, 'pull', '--agent', 'claude');
