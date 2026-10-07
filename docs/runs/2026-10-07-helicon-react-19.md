@@ -155,6 +155,18 @@ Lockfile: react, react-dom, @types/react and @types/react-dom go to 19.3.0 and s
 - **The agent didn't game the checker.** It could have passed lap 1's check by adding
   `react` to the root `package.json`. It asked first.
 
+## Follow-up
+
+**The bug:** `verify-version.mjs` read only the root `package.json` and only `node_modules/<pkg>`
+at the root, so in a workspaces monorepo a correct upgrade could never pass. **Fixed in
+`untilship@0.1.2`** ([CHANGELOG](../../CHANGELOG.md)): the check now reads npm/yarn/bun
+`workspaces`, `pnpm-workspace.yaml` and `lerna.json`, fails if any workspace is left on the old
+major, and checks every installed copy (per workspace, nested and pnpm store) with its path.
+A build that fails because a tool such as `cargo` is missing is now named as an environment
+problem in the lap message and the blocked report, with the `--set build=...` to scope it.
+
+A re-run on the same base commit with 0.1.2 will be added below.
+
 ## Raw files
 
 | File | What it is |
