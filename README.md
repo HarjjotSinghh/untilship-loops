@@ -104,6 +104,9 @@ twice is safe. `pull` keeps a small record (`.untilship/install.json`) of what i
 
 ### Platforms
 
+See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for what you need and what's been tested.
+
+
 Tested on macOS and Linux. Windows is untested: the hooks and loop scripts are plain Node
 (>= 18.17), so they should run, but nobody has checked yet.
 
