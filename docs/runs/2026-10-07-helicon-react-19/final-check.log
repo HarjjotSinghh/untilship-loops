@@ -1,0 +1,7 @@
+$ node ".untilship/loops/dependency-upgrade/verify-version.mjs" "react" "^19"
+VERSION react: declared=none installed=19.3.0 target=^19
+  - react is not declared in package.json
+VERSION NOT UPGRADED
+
+exit 1
+

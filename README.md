@@ -160,6 +160,15 @@ node bin/untilship run launch-post --agent-cmd "my-agent --yes"   # prompt appen
 
 Exit codes: 0 passed, 3 blocked, 2 usage error.
 
+## Real runs
+
+Real runs of the published package, logged in full, including the ones that fail:
+
+- [2026-10-07: React 18 → 19 in helicon](docs/runs/2026-10-07-helicon-react-19.md):
+  `dependency-upgrade`, Claude Code, **blocked after 3 laps**, $0.54, 2.6 min. The upgrade
+  itself worked. The loop could not pass because `verify-version.mjs` reads only the root
+  `package.json`, so a workspaces monorepo blocks until that is fixed.
+
 ## Honest limits
 
 - **Cursor cannot veto a stop.** Its `stop` hook can only auto-submit a follow-up message,
