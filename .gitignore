@@ -1,0 +1,7 @@
+node_modules/
+!examples/dependency-upgrade/node_modules/
+!examples/dependency-upgrade/solution/node_modules/
+.DS_Store
+.untilship/
+!dist/**/.untilship/
+dist-check/

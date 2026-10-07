@@ -1,0 +1,14 @@
+# Tally
+
+> Tally is a command-line tool that turns bank CSV exports into a monthly spending summary.
+
+Free for personal use. Runs locally; no data leaves the machine.
+
+## Product
+
+- [Home](https://tally.example.com/): what Tally does and who it is for
+- [Launch post](https://tally.example.com/blog/hello.html): benchmarks and beta results
+
+## Optional
+
+- [GitHub](https://github.com/example/tally): source code and supported bank formats

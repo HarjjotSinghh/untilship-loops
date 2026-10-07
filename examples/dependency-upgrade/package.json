@@ -1,0 +1,13 @@
+{
+  "name": "invoice-fixture",
+  "private": true,
+  "type": "module",
+  "description": "Fixture for the dependency-upgrade loop: upgrade tiny-math 1.x -> 2.x (add() was renamed to sum()).",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/invoice.test.mjs"
+  },
+  "dependencies": {
+    "tiny-math": "^1.2.0"
+  }
+}

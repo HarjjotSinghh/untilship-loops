@@ -1,0 +1,6 @@
+{
+  "name": "greet-fixture",
+  "private": true,
+  "type": "module",
+  "description": "Fixture for the idea-to-mvp loop: a greeting CLI, half built."
+}
