@@ -5,3 +5,6 @@ node_modules/
 .untilship/
 !dist/*/.untilship/
 !test/fixtures/*/.untilship/
+
+# benchmark harness and results live in the private untilship-bench repo
+bench/
