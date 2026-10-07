@@ -5,6 +5,7 @@
  *   untilship list
  *   untilship pull [loop ...] --agent claude|codex|cursor [--dir .] [--all]
  *   untilship run <loop> --agent claude|codex|cursor [--agent-cmd "<cmd>"] [--set k=v ...] [--dir .]
+ *   untilship remove [--agent claude|codex|cursor] [--dir .] [--keep-reports]
  *   untilship start|status|peek|abort ...      (same as untilship-check, run in --dir)
  *
  * Zero dependencies. MIT License.
@@ -15,11 +16,21 @@ const fs = require('fs');
 const path = require('path');
 const cp = require('child_process');
 
+const crypto = require('crypto');
+
 const PKG_ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(PKG_ROOT, 'dist');
 const engine = require('./untilship-check');
 const AGENTS = ['claude', 'codex', 'cursor'];
 const GITIGNORE = 'active.json\nlock/\nerrors.log\n*.tmp\n';
+/** Where each agent's hook config and skills live (mirrors scripts/build-adapters.mjs). */
+const HOOK_TARGET = { claude: '.claude/settings.json', codex: '.codex/hooks.json', cursor: '.cursor/hooks.json' };
+const SKILL_DIR = { claude: '.claude/skills', codex: '.agents/skills', cursor: '.cursor/skills' };
+/** What `pull` created, so `remove` can put the repo back exactly as it was. */
+const INSTALL_RECORD = '.untilship/install.json';
+const BLOCK_RE = /<!-- untilship:start -->[\s\S]*?<!-- untilship:end -->\n?/;
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 function parseArgs(argv) {
   const a = { _: [], set: {} };
@@ -27,7 +38,7 @@ function parseArgs(argv) {
     const x = argv[i];
     if (x === '--set') { const kv = argv[++i] || ''; const eq = kv.indexOf('='); if (eq < 1) throw new Error(`--set expects key=value, got "${kv}"`); a.set[kv.slice(0, eq)] = kv.slice(eq + 1); } else if (x.startsWith('--')) {
       const k = x.slice(2);
-      if (['all', 'force', 'help', 'dry-run'].includes(k)) a[k] = true; else a[k] = argv[++i];
+      if (['all', 'force', 'help', 'dry-run', 'keep-reports'].includes(k)) a[k] = true; else a[k] = argv[++i];
     } else a._.push(x);
   }
   return a;
@@ -71,6 +82,20 @@ function copy(src, dst) {
   try { if (fs.statSync(src).mode & 0o111) fs.chmodSync(dst, 0o755); } catch { /* windows */ }
 }
 
+/** Serialize JSON in the same indentation / trailing-newline style as `raw` (2 spaces + \n if new). */
+function stringifyLike(obj, raw) {
+  if (raw === null || raw === undefined) return JSON.stringify(obj, null, 2) + '\n';
+  const m = /^[{[][ \t]*\r?\n([ \t]+)/.exec(raw);
+  return JSON.stringify(obj, null, m ? m[1] : 2) + (raw.endsWith('\n') || !raw.trim() ? '\n' : '');
+}
+
+function readInstallRecord(dir) {
+  try {
+    const r = JSON.parse(fs.readFileSync(path.join(dir, INSTALL_RECORD), 'utf8'));
+    return isObj(r) ? { version: 1, dirs: Array.isArray(r.dirs) ? r.dirs : [], files: isObj(r.files) ? r.files : {} } : null;
+  } catch { return null; }
+}
+
 function pull(args) {
   const agent = args.agent;
   if (!AGENTS.includes(agent)) throw new Error(`--agent must be one of ${AGENTS.join(', ')}`);
@@ -84,28 +109,195 @@ function pull(args) {
   const written = [];
   // validate hook config before writing anything
   const hookTarget = path.join(dir, a.hook.mergeInto);
-  const merged = mergeHook(agent, readJsonOrEmpty(hookTarget), JSON.parse(fs.readFileSync(path.join(base, a.hook.file), 'utf8')));
+  const hookRaw = fs.existsSync(hookTarget) ? fs.readFileSync(hookTarget, 'utf8') : null;
+  const existingHook = readJsonOrEmpty(hookTarget);
+  const merged = mergeHook(agent, existingHook, JSON.parse(fs.readFileSync(path.join(base, a.hook.file), 'utf8')));
+
+  // install record: first pull wins for each file (it saw the original), dirs accumulate
+  const record = readInstallRecord(dir) || { version: 1, dirs: [], files: {} };
+  const dirs = new Set(record.dirs);
+  const track = (relFile) => { // remember every directory outside .untilship/ that this pull creates
+    const parts = relFile.split('/').slice(0, -1);
+    for (let i = 1; i <= parts.length; i++) {
+      const d = parts.slice(0, i).join('/');
+      if (d === '.untilship' || d.startsWith('.untilship/')) return;
+      if (!fs.existsSync(path.join(dir, d))) dirs.add(d);
+    }
+  };
+  const ev = agent === 'cursor' ? 'stop' : 'Stop';
+  if (!record.files[a.hook.mergeInto]) {
+    const added = [];
+    if (!isObj(existingHook.hooks)) added.push('hooks');
+    if (!isObj(existingHook.hooks) || !(ev in existingHook.hooks)) added.push(`hooks.${ev}`);
+    if (agent === 'cursor' && !('version' in existingHook)) added.push('version');
+    record.files[a.hook.mergeInto] = { created: hookRaw === null, added };
+  }
+
   for (const f of a.common) {
     if (f === a.hook.file || f === 'AGENTS.untilship.md') continue;
-    copy(path.join(base, f), path.join(dir, f)); written.push(f);
+    track(f); copy(path.join(base, f), path.join(dir, f)); written.push(f);
   }
-  for (const w of wanted) for (const f of a.loops[w]) { copy(path.join(base, f), path.join(dir, f)); written.push(f); }
+  for (const w of wanted) for (const f of a.loops[w]) { track(f); copy(path.join(base, f), path.join(dir, f)); written.push(f); }
+  track(a.hook.mergeInto);
   fs.mkdirSync(path.dirname(hookTarget), { recursive: true });
-  fs.writeFileSync(hookTarget, JSON.stringify(merged, null, 2) + '\n');
+  fs.writeFileSync(hookTarget, stringifyLike(merged, hookRaw));
   written.push(`${a.hook.mergeInto} (merged Stop hook)`);
   if (a.common.includes('AGENTS.untilship.md')) {
     const agentsMd = path.join(dir, 'AGENTS.md');
     const block = fs.readFileSync(path.join(base, 'AGENTS.untilship.md'), 'utf8');
-    const cur = fs.existsSync(agentsMd) ? fs.readFileSync(agentsMd, 'utf8') : '';
-    const next = /<!-- untilship:start -->[\s\S]*?<!-- untilship:end -->\n?/.test(cur)
-      ? cur.replace(/<!-- untilship:start -->[\s\S]*?<!-- untilship:end -->\n?/, block)
-      : (cur ? cur.replace(/\n*$/, '\n\n') : '') + block;
+    const exists = fs.existsSync(agentsMd);
+    const cur = exists ? fs.readFileSync(agentsMd, 'utf8') : '';
+    const hasBlock = BLOCK_RE.test(cur);
+    if (!hasBlock && !record.files['AGENTS.md']) record.files['AGENTS.md'] = { created: !exists, sha256: exists ? sha256(cur) : null };
+    const next = hasBlock ? cur.replace(BLOCK_RE, block) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + block;
     fs.writeFileSync(agentsMd, next);
     written.push('AGENTS.md (UntilShip section)');
   }
   const gi = path.join(dir, '.untilship', '.gitignore');
   if (!fs.existsSync(gi)) { fs.writeFileSync(gi, GITIGNORE); written.push('.untilship/.gitignore'); }
+  record.dirs = Array.from(dirs).sort();
+  fs.writeFileSync(path.join(dir, INSTALL_RECORD), JSON.stringify(record, null, 2) + '\n');
   return { dir, agent, loops: wanted, written };
+}
+
+/* ------------------------------------------------------------------ */
+/* remove                                                              */
+/* ------------------------------------------------------------------ */
+
+const hasOurHook = (agent, obj) => {
+  const ev = agent === 'cursor' ? 'stop' : 'Stop';
+  const list = isObj(obj) && isObj(obj.hooks) && Array.isArray(obj.hooks[ev]) ? obj.hooks[ev] : [];
+  return agent === 'cursor'
+    ? list.some((h) => h && isOurs(h.command))
+    : list.some((g) => g && Array.isArray(g.hooks) && g.hooks.some((h) => h && isOurs(h.command)));
+};
+
+/**
+ * Take UntilShip's stop hook out of a hook config, leaving every other hook and key alone.
+ * `rec` (from the install record) says which containers UntilShip added; without it, only
+ * containers left empty by the removal are dropped.
+ */
+function unmergeHook(agent, existing, rec) {
+  const out = JSON.parse(JSON.stringify(existing));
+  const ev = agent === 'cursor' ? 'stop' : 'Stop';
+  if (!hasOurHook(agent, out)) return { changed: false, obj: out, empty: false };
+  if (agent === 'cursor') {
+    out.hooks.stop = out.hooks.stop.filter((h) => !(h && isOurs(h.command)));
+  } else {
+    out.hooks.Stop = out.hooks.Stop.map((g) => {
+      if (!g || !Array.isArray(g.hooks)) return g;
+      const hs = g.hooks.filter((h) => !(h && isOurs(h.command)));
+      return hs.length === g.hooks.length ? g : (hs.length ? { ...g, hooks: hs } : null);
+    }).filter((g) => g !== null);
+  }
+  const added = rec && Array.isArray(rec.added) ? rec.added : null;
+  if (!out.hooks[ev].length && (!added || added.includes(`hooks.${ev}`))) delete out.hooks[ev];
+  if (!Object.keys(out.hooks).length && (!added || added.includes('hooks'))) delete out.hooks;
+  const ourVersion = agent === 'cursor' && (added ? added.includes('version') : true);
+  if (ourVersion && added && 'version' in out) delete out.version;
+  const rest = Object.keys(out).filter((k) => !(ourVersion && k === 'version' && out.version === 1));
+  return { changed: true, obj: out, empty: rest.length === 0 };
+}
+
+function rmrf(p) { fs.rmSync(p, { recursive: true, force: true }); }
+
+function remove(args) {
+  const dir = path.resolve(args.dir || '.');
+  if (args.agent !== undefined && !AGENTS.includes(args.agent)) throw new Error(`--agent must be one of ${AGENTS.join(', ')}`);
+  const agents = args.agent ? [args.agent] : AGENTS;
+  const record = readInstallRecord(dir);
+  const removed = [];
+  const notes = [];
+
+  for (const agent of agents) {
+    // 1. skills: every untilship-* folder in the agent's skill dir
+    const sd = path.join(dir, SKILL_DIR[agent]);
+    let ents = [];
+    try { ents = fs.readdirSync(sd, { withFileTypes: true }); } catch { /* none */ }
+    for (const e of ents.filter((x) => x.isDirectory() && x.name.startsWith('untilship-')).sort((x, y) => x.name.localeCompare(y.name))) {
+      rmrf(path.join(sd, e.name));
+      removed.push(`${SKILL_DIR[agent]}/${e.name}/`);
+    }
+    // 2. the Stop hook entry
+    const target = HOOK_TARGET[agent];
+    const abs = path.join(dir, target);
+    if (!fs.existsSync(abs)) continue;
+    const raw = fs.readFileSync(abs, 'utf8');
+    let obj;
+    try { obj = raw.trim() ? JSON.parse(raw) : {}; } catch {
+      notes.push(`${target} is not valid JSON; left untouched (remove the untilship-check hook by hand)`);
+      continue;
+    }
+    const rec = record && record.files[target];
+    const res = unmergeHook(agent, obj, rec);
+    if (!res.changed) continue;
+    if (res.empty && (!rec || rec.created)) {
+      fs.rmSync(abs, { force: true });
+      removed.push(target);
+    } else {
+      fs.writeFileSync(abs, stringifyLike(res.obj, raw));
+      removed.push(`${target} (UntilShip Stop hook entry; other hooks and keys kept)`);
+    }
+    if (record) delete record.files[target];
+  }
+
+  // Shared parts go only when no other agent's UntilShip hook is still installed.
+  const stillUsing = AGENTS.filter((ag) => !agents.includes(ag)).filter((ag) => {
+    try { return hasOurHook(ag, JSON.parse(fs.readFileSync(path.join(dir, HOOK_TARGET[ag]), 'utf8'))); } catch { return false; }
+  });
+
+  // 3. the marked AGENTS.md block (written for codex/cursor)
+  const agentsMd = path.join(dir, 'AGENTS.md');
+  if (!stillUsing.some((ag) => ag !== 'claude') && fs.existsSync(agentsMd)) {
+    const cur = fs.readFileSync(agentsMd, 'utf8');
+    const m = BLOCK_RE.exec(cur);
+    if (m) {
+      const rec = record && record.files['AGENTS.md'];
+      let next = cur.slice(0, m.index) + cur.slice(m.index + m[0].length);
+      if (m.index + m[0].length >= cur.length) { // block was last: undo the blank line pull added before it
+        const body = next.replace(/\n*$/, '');
+        const candidates = [body + '\n', body, body + '\n\n', body + '\n\n\n'];
+        next = (rec && rec.sha256 && candidates.find((c) => sha256(c) === rec.sha256)) || (body ? body + '\n' : '');
+      }
+      if (!next.trim() && (!rec || rec.created)) {
+        fs.rmSync(agentsMd, { force: true });
+        removed.push('AGENTS.md');
+      } else {
+        fs.writeFileSync(agentsMd, next);
+        removed.push('AGENTS.md (UntilShip section; the rest kept)');
+      }
+      if (record) delete record.files['AGENTS.md'];
+    }
+  }
+
+  // 4. directories pull created (or, without a record, the agents' own dirs) if now empty
+  const candidates = record ? record.dirs : ['.claude/skills', '.claude', '.agents/skills', '.agents', '.cursor/skills', '.cursor', '.codex'];
+  for (const d of candidates.slice().sort((x, y) => y.split('/').length - x.split('/').length || y.localeCompare(x))) {
+    const p = path.join(dir, d);
+    try { if (fs.statSync(p).isDirectory() && !fs.readdirSync(p).length) { fs.rmdirSync(p); removed.push(`${d}/`); } } catch { /* gone */ }
+  }
+
+  // 5. .untilship/
+  const state = path.join(dir, '.untilship');
+  if (fs.existsSync(state)) {
+    if (stillUsing.length) {
+      notes.push(`kept .untilship/ (still used by: ${stillUsing.join(', ')})`);
+      if (record) fs.writeFileSync(path.join(dir, INSTALL_RECORD), JSON.stringify(record, null, 2) + '\n');
+    } else if (args['keep-reports'] && fs.existsSync(path.join(state, 'runs'))) {
+      for (const e of fs.readdirSync(state).sort()) {
+        if (e === 'runs') continue;
+        const p = path.join(state, e);
+        const isDir = fs.statSync(p).isDirectory();
+        rmrf(p);
+        removed.push(`.untilship/${e}${isDir ? '/' : ''}`);
+      }
+      notes.push('kept .untilship/runs/ (--keep-reports)');
+    } else {
+      rmrf(state);
+      removed.push('.untilship/');
+    }
+  }
+  return { dir, agents, removed, notes };
 }
 
 /** Split a command template into argv, honouring simple quotes. */
@@ -179,6 +371,9 @@ const HELP = `untilship: agent loops with a stop condition enforced outside the 
 
   untilship list                                   loops in this package
   untilship pull [loop ...] --agent <a> [--dir .]  install loops + stop hook (default: all free loops)
+  untilship remove [--agent <a>] [--dir .] [--keep-reports]
+                                                   uninstall: skills, UntilShip's hook entry, AGENTS.md block,
+                                                   .untilship/ (--keep-reports keeps .untilship/runs/)
   untilship run <loop> --agent <a> [--agent-cmd "<cmd>"] [--set k=v] [--dir .]
                                                    headless runner: re-invokes the agent until the check passes
   untilship start|status|peek|abort|eval ...       passthrough to untilship-check (in --dir)
@@ -201,6 +396,13 @@ function main(argv) {
         `Next: open the repo in ${r.agent} and invoke /untilship-<loop>. Commit .untilship/ (runs/ holds reports).\n`);
       return 0;
     }
+    if (cmd === 'remove' || cmd === 'uninstall') {
+      const r = remove(a);
+      if (!r.removed.length) process.stdout.write(`Nothing to remove: no UntilShip files for ${r.agents.join(', ')} in ${r.dir}.\n`);
+      else process.stdout.write(`Removed from ${r.dir}:\n${r.removed.map((x) => '  ' + x).join('\n')}\n`);
+      for (const n of r.notes) process.stdout.write(`Note: ${n}\n`);
+      return 0;
+    }
     if (cmd === 'run') return runLoop(a);
     if (['start', 'status', 'peek', 'abort', 'eval', 'hook'].includes(cmd)) {
       const rest = argv.slice(argv.indexOf(cmd) + 1).filter((x, i, arr) => x !== '--dir' && arr[i - 1] !== '--dir');
@@ -214,6 +416,6 @@ function main(argv) {
   return 2;
 }
 
-module.exports = { pull, mergeHook, splitCmd, runLoop, main };
+module.exports = { pull, remove, mergeHook, unmergeHook, stringifyLike, splitCmd, runLoop, main };
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
