@@ -1,0 +1,5 @@
+{
+  "name": "acme-pnpm",
+  "private": true,
+  "scripts": { "build": "pnpm -r build", "test": "node -e 0" }
+}

@@ -32,14 +32,37 @@ If this repo's commands differ from the defaults, override them at start:
 `--set build="pnpm build" --set typecheck="pnpm tsc --noEmit" --set test="pnpm test"`.
 For a repo without TypeScript, pass `--set typecheck="node -e 0"`.
 
+### Monorepos
+
+The version check reads workspaces itself (npm/yarn/bun `workspaces`, `pnpm-workspace.yaml`,
+`lerna.json`), so declare the package in the workspaces that use it, not in the root.
+
+The default `build`, `typecheck` and `test` run at the repo root, which in a monorepo means every
+workspace, including ones this upgrade does not touch and that may need a toolchain this machine
+lacks (a Tauri app needs `cargo`, a mobile app needs Xcode). Before `start`, look at the root
+`scripts` and pick commands scoped to the workspaces that depend on the package, plus the ones that
+consume them:
+
+- npm: `--set build="npm run build -w @acme/ui -w @acme/web"` (add `--if-present` if some lack the script)
+- pnpm: `--set build="pnpm --filter @acme/ui --filter @acme/web build"` (`--filter "...@acme/ui"` adds its dependents)
+- turbo: `--set build="npx turbo run build --filter=@acme/ui --filter=@acme/web"`
+- no root `tsconfig.json`: `--set typecheck="npx --no-install tsc --noEmit -p packages/ui && npx --no-install tsc --noEmit -p apps/web"`
+
+Scope to what the change can break, not to what passes. Leaving out a workspace that imports the
+package hides real breakage. If a check fails because a program is missing (`cargo: command not
+found`), the lap output and the blocker report say so; the commands cannot change mid-run, so write
+it in `blockers.md` and a human restarts with a scoped command.
+
 ## Steps
 
 1. Read the package's changelog and migration guide for every major between the current
    and the target version. List the breaking changes that touch this repo (search the code
    for each removed or renamed API).
-2. Bump the version in `package.json` and install it with the repo's package manager
-   (`npm install`, `pnpm install`, `yarn`, `bun install`). Lockfile changes are expected.
-   Upgrade peer dependencies the package now requires.
+2. Bump the version in every `package.json` that declares it (root and workspaces) and install
+   it with the repo's package manager (`npm install`, `pnpm install`, `yarn`, `bun install`).
+   Lockfile changes are expected. Upgrade peer dependencies the package now requires. If an old
+   copy stays installed next to the new one, find who pulls it in (`npm ls <pkg>`,
+   `pnpm why <pkg>`) and fix that, rather than leaving two copies.
 3. Run the build, then the type check, then the tests. Fix the first failure, re-run,
    repeat. Use `node .untilship/bin/untilship-check.cjs peek` to run the full stop condition without using a lap.
 4. Fix call sites, not tests. Test files that existed at `start` are protected: editing or
@@ -52,8 +75,11 @@ For a repo without TypeScript, pass `--set typecheck="node -e 0"`.
 ## Stop when
 
 All four commands exit 0, in order:
-1. `verify-version.mjs`: the declared range in `package.json` and the installed version in
-   `node_modules` both satisfy `target`. A downgrade or a no-op does not pass.
+1. `verify-version.mjs`: the root `package.json` or at least one workspace declares the package
+   with a range that satisfies `target`; no manifest still declares an old range (one workspace
+   left on `^18` is a half-done upgrade); and every installed copy under `node_modules` (root,
+   each workspace, nested duplicates, pnpm's `.pnpm` store) satisfies `target`. Each mismatch is
+   reported with its path. A downgrade or a no-op does not pass.
 2. build, 3. type check, 4. the full test suite.
 
 Guards that also fail the lap (full list: `docs/GUARDS.md` in the UntilShip repo):

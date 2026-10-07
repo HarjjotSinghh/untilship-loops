@@ -1,0 +1,9 @@
+{
+  "name": "acme-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "node -e 0"
+  }
+}

@@ -1,0 +1,11 @@
+# pnpm workspace with a default catalog and an excluded package
+packages:
+  - 'packages/*'
+  - "!packages/legacy"
+
+catalog:
+  react: ^19.0.0
+
+catalogs:
+  old:
+    react: ^18.2.0

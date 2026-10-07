@@ -19,7 +19,7 @@ const path = require('path');
 const crypto = require('crypto');
 const cp = require('child_process');
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const STATE_DIR = '.untilship';
 const DEFAULT_MAX_LAPS = 8;
 const DEFAULT_TIMEOUT_S = 600;
@@ -563,6 +563,44 @@ function start(root, ref, opts = {}) {
 
 function tail(s, n) { s = String(s || ''); return s.length > n ? '…' + s.slice(s.length - n) : s; }
 
+/**
+ * Output patterns that mean "a program the check needs is not installed here", e.g.
+ * `cargo` for a Tauri build. Such a failure is about the environment, not the code.
+ */
+const MISSING_TOOL_PATTERNS = [
+  /command not found: ([A-Za-z][\w.+-]*)/, // zsh
+  /(?:^|[\s:])([A-Za-z][\w.+-]*): (?:command )?not found\b/m, // sh: 1: cargo: not found / bash: cargo: command not found
+  /'([A-Za-z][\w.+-]*)' is not recognized as an internal or external command/, // cmd.exe
+  /\bspawn ([^\s'"]+) ENOENT\b/, // node child_process
+  /failed to run (?:command )?'?([A-Za-z][\w.+-]*)\b[^\n]*?(?:No such file or directory|os error 2|program not found)/i, // e.g. tauri -> cargo
+];
+
+function detectMissingTool(output, exit) {
+  const out = String(output || '');
+  for (const re of MISSING_TOOL_PATTERNS) {
+    const m = re.exec(out);
+    if (m && m[1] && !/^\d+$/.test(m[1]) && !/(?:error|exception|warning)$/i.test(m[1])) return path.basename(m[1].replace(/\\/g, '/'));
+  }
+  return exit === 127 ? '(unknown: exit 127)' : null;
+}
+
+/** Which --set var produced this check command, if any (so the hint can name it). */
+function varForCommand(cfg, cmd) {
+  for (const [k, v] of Object.entries(cfg.vars || {})) if (typeof v === 'string' && v.trim() && v.trim() === String(cmd).trim()) return k;
+  return null;
+}
+
+function toolchainHint(cfg, lap, forHuman) {
+  const t = lap && lap.missingTool;
+  if (!t) return null;
+  const v = varForCommand(cfg, t.cmd);
+  const tool = t.tool.startsWith('(') ? 'a required program' : '`' + t.tool + '`';
+  const scoped = `--set ${v || '<var>'}="<the same command, scoped to the packages this change touches>"`;
+  return forHuman
+    ? `Toolchain: ${tool} was not found while running \`${t.cmd}\`. That failure is about the environment, not the code. Install it where the check runs, or start a new run with ${scoped} (e.g. \`npm run build -w <workspace>\`, \`pnpm --filter <pkg> build\`).`
+    : `This looks like a missing toolchain, not a code error: ${tool} was not found while running \`${t.cmd}\`. You cannot change the check mid-run. If this environment cannot provide it, say so in blockers.md, so a human can install it or restart with ${scoped}.`;
+}
+
 function runChecks(root, run) {
   const cfg = run.config;
   const env = Object.assign({}, process.env, {
@@ -585,7 +623,8 @@ function runChecks(root, run) {
     const stdout = r.stdout || '';
     const stderr = (r.stderr || '') + (r.error && !timedOut ? `\n[untilship] ${r.error.message}` : '') +
       (timedOut ? `\n[untilship] check timed out after ${cfg.timeoutS}s` : '');
-    results.push({ cmd, exit, durationMs: Date.now() - t, stdoutTail: tail(stdout, TAIL_CHARS), stderrTail: tail(stderr, TAIL_CHARS) });
+    const missingTool = exit !== 0 && !timedOut ? detectMissingTool(stdout + '\n' + stderr, exit) : null;
+    results.push({ cmd, exit, durationMs: Date.now() - t, stdoutTail: tail(stdout, TAIL_CHARS), stderrTail: tail(stderr, TAIL_CHARS), ...(missingTool ? { missingTool } : {}) });
     stdoutAll += stdout;
     stderrAll += stderr;
     if (exit !== 0) break;
@@ -599,6 +638,7 @@ function runChecks(root, run) {
   return {
     exitCode: failed ? failed.exit : 0, durationMs: Date.now() - t0, commands: results,
     failedCommand: failed ? failed.cmd : null, metric,
+    missingTool: failed && failed.missingTool ? { tool: failed.missingTool, cmd: failed.cmd } : null,
     stdoutTail: tail(failed ? failed.stdoutTail : stdoutAll, REPORT_TAIL_CHARS),
     stderrTail: tail(failed ? failed.stderrTail : stderrAll, REPORT_TAIL_CHARS),
   };
@@ -661,6 +701,7 @@ function evaluate(root, opts = {}) {
       failedCommand: res.failedCommand, commands: res.commands,
       stdoutTail: res.stdoutTail, stderrTail: res.stderrTail,
       tampered, forbidden, integrity, fingerprint, stalled,
+      ...(res.missingTool ? { missingTool: res.missingTool } : {}),
     };
     run.laps.push(lap);
     if (!run.agent && agent !== 'none') run.agent = agent;
@@ -716,6 +757,8 @@ function blockReason(run, lap) {
     lines.push(`Failing check: ${lap.failedCommand} (exit ${lap.exitCode})`);
     const out = [lap.stdoutTail, lap.stderrTail].filter((s) => s && s.trim()).join('\n').trim();
     if (out) lines.push('Output (tail):', tail(out, TAIL_CHARS));
+    const hint = toolchainHint(cfg, lap, false);
+    if (hint) lines.push(hint);
   } else if (lap.tampered.length || lap.forbidden.length || lap.integrity.length) {
     lines.push('The check command itself passed, but the guards above failed, so this lap does not count as a pass.');
   }
@@ -795,6 +838,9 @@ function finalizeReport(root, run) {
     parts.push(fs.existsSync(b) ? fs.readFileSync(b, 'utf8').trim() : '_The agent did not write blocker notes._', '');
     parts.push('### Next step for a human', '');
     parts.push('Read the last failure above, decide whether the check or the code is wrong, then start a new run.');
+    const toolLap = [...run.laps].reverse().find((l) => l.missingTool);
+    const hint = toolchainHint(c, toolLap, true);
+    if (hint) parts.push('', `**${hint.replace(/^Toolchain:/, 'Toolchain:**')}`);
   } else if (run.status === 'aborted') {
     parts.push(`## Result: ABORTED`, '', `Reason: ${run.result.why}`);
   }
@@ -991,7 +1037,7 @@ function main(argv) {
 module.exports = {
   VERSION, DEFAULT_PROTECT, CORE_PROTECT, FORBID_EXCLUDE, TEST_GLOBS, parseFrontmatter, parseYamlSubset, globToRegex,
   loadLoop, interpolate, start, evaluate, status, abort, peek, respond, detectAgent, findRoot, snapshotProtected,
-  diffSnapshots, diffJson, parseJsonSpec, countForbidden, forbiddenIncreases, workingTreeFingerprint, main,
+  diffSnapshots, diffJson, parseJsonSpec, countForbidden, forbiddenIncreases, workingTreeFingerprint, detectMissingTool, main,
 };
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));

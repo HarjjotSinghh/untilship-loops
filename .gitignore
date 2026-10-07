@@ -1,6 +1,8 @@
 node_modules/
 !examples/dependency-upgrade/node_modules/
 !examples/dependency-upgrade/solution/node_modules/
+!test/fixtures/*/node_modules/
+!test/fixtures/*/node_modules/**/node_modules/
 .DS_Store
 .untilship/
 !dist/*/.untilship/

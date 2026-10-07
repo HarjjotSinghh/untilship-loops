@@ -1,6 +1,6 @@
 {
   "name": "untilship",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Agent loops for Claude Code, Codex and Cursor that keep working until a stop condition, checked outside the model, passes.",
   "license": "MIT",
   "bin": {
@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "node scripts/build-adapters.mjs",
-    "test": "node --test test/engine.test.mjs test/loops.test.mjs test/validators.test.mjs test/adapters.test.mjs test/runner.test.mjs test/guards.test.mjs test/remove.test.mjs",
+    "test": "node --test test/engine.test.mjs test/loops.test.mjs test/validators.test.mjs test/adapters.test.mjs test/runner.test.mjs test/guards.test.mjs test/remove.test.mjs test/monorepo.test.mjs",
     "demo": "node scripts/demo.mjs"
   },
   "keywords": ["claude-code", "codex", "cursor", "agents", "hooks", "loops", "ai-agents"]
