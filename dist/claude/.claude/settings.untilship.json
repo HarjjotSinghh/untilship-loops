@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.untilship/bin/untilship-check.cjs\" hook --agent claude",
+            "timeout": 3600
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,219 @@
+#!/usr/bin/env node
+/*
+ * untilship: install loops into a repo and (optionally) drive them headlessly.
+ *
+ *   untilship list
+ *   untilship pull [loop ...] --agent claude|codex|cursor [--dir .] [--all]
+ *   untilship run <loop> --agent claude|codex|cursor [--agent-cmd "<cmd>"] [--set k=v ...] [--dir .]
+ *   untilship start|status|peek|abort ...      (same as untilship-check, run in --dir)
+ *
+ * Zero dependencies. MIT License.
+ */
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const cp = require('child_process');
+
+const PKG_ROOT = path.resolve(__dirname, '..');
+const DIST = path.join(PKG_ROOT, 'dist');
+const engine = require('./untilship-check');
+const AGENTS = ['claude', 'codex', 'cursor'];
+const GITIGNORE = 'active.json\nlock/\nerrors.log\n*.tmp\n';
+
+function parseArgs(argv) {
+  const a = { _: [], set: {} };
+  for (let i = 0; i < argv.length; i++) {
+    const x = argv[i];
+    if (x === '--set') { const kv = argv[++i] || ''; const eq = kv.indexOf('='); if (eq < 1) throw new Error(`--set expects key=value, got "${kv}"`); a.set[kv.slice(0, eq)] = kv.slice(eq + 1); } else if (x.startsWith('--')) {
+      const k = x.slice(2);
+      if (['all', 'force', 'help', 'dry-run'].includes(k)) a[k] = true; else a[k] = argv[++i];
+    } else a._.push(x);
+  }
+  return a;
+}
+
+function manifest() {
+  const f = path.join(DIST, 'manifest.json');
+  if (!fs.existsSync(f)) throw new Error('dist/manifest.json missing; run: node scripts/build-adapters.mjs');
+  return JSON.parse(fs.readFileSync(f, 'utf8'));
+}
+
+function readJsonOrEmpty(file) {
+  if (!fs.existsSync(file)) return {};
+  const raw = fs.readFileSync(file, 'utf8');
+  if (!raw.trim()) return {};
+  try { return JSON.parse(raw); } catch (e) { throw new Error(`${file} is not valid JSON (${e.message}); fix it, then re-run pull. Nothing was changed.`); }
+}
+
+const isOurs = (cmd) => typeof cmd === 'string' && cmd.includes('untilship-check');
+
+/** Merge the UntilShip stop hook into an agent's hook config, replacing any older UntilShip entry. */
+function mergeHook(agent, existing, snippet) {
+  const out = JSON.parse(JSON.stringify(existing || {}));
+  out.hooks = out.hooks || {};
+  if (agent === 'cursor') {
+    out.version = out.version || 1;
+    const cur = Array.isArray(out.hooks.stop) ? out.hooks.stop.filter((h) => !isOurs(h.command)) : [];
+    out.hooks.stop = [...cur, ...snippet.hooks.stop];
+  } else {
+    const cur = Array.isArray(out.hooks.Stop) ? out.hooks.Stop
+      .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isOurs(h.command)) }))
+      .filter((g) => g.hooks.length) : [];
+    out.hooks.Stop = [...cur, ...snippet.hooks.Stop];
+  }
+  return out;
+}
+
+function copy(src, dst) {
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.copyFileSync(src, dst);
+  try { if (fs.statSync(src).mode & 0o111) fs.chmodSync(dst, 0o755); } catch { /* windows */ }
+}
+
+function pull(args) {
+  const agent = args.agent;
+  if (!AGENTS.includes(agent)) throw new Error(`--agent must be one of ${AGENTS.join(', ')}`);
+  const m = manifest();
+  const dir = path.resolve(args.dir || '.');
+  const all = Object.keys(m.loops);
+  const wanted = args.all || !args._.length ? all : args._;
+  for (const w of wanted) if (!m.loops[w]) throw new Error(`unknown loop "${w}". Available: ${all.join(', ')}`);
+  const a = m.agents[agent];
+  const base = path.join(DIST, agent);
+  const written = [];
+  // validate hook config before writing anything
+  const hookTarget = path.join(dir, a.hook.mergeInto);
+  const merged = mergeHook(agent, readJsonOrEmpty(hookTarget), JSON.parse(fs.readFileSync(path.join(base, a.hook.file), 'utf8')));
+  for (const f of a.common) {
+    if (f === a.hook.file || f === 'AGENTS.untilship.md') continue;
+    copy(path.join(base, f), path.join(dir, f)); written.push(f);
+  }
+  for (const w of wanted) for (const f of a.loops[w]) { copy(path.join(base, f), path.join(dir, f)); written.push(f); }
+  fs.mkdirSync(path.dirname(hookTarget), { recursive: true });
+  fs.writeFileSync(hookTarget, JSON.stringify(merged, null, 2) + '\n');
+  written.push(`${a.hook.mergeInto} (merged Stop hook)`);
+  if (a.common.includes('AGENTS.untilship.md')) {
+    const agentsMd = path.join(dir, 'AGENTS.md');
+    const block = fs.readFileSync(path.join(base, 'AGENTS.untilship.md'), 'utf8');
+    const cur = fs.existsSync(agentsMd) ? fs.readFileSync(agentsMd, 'utf8') : '';
+    const next = /<!-- untilship:start -->[\s\S]*?<!-- untilship:end -->\n?/.test(cur)
+      ? cur.replace(/<!-- untilship:start -->[\s\S]*?<!-- untilship:end -->\n?/, block)
+      : (cur ? cur.replace(/\n*$/, '\n\n') : '') + block;
+    fs.writeFileSync(agentsMd, next);
+    written.push('AGENTS.md (UntilShip section)');
+  }
+  const gi = path.join(dir, '.untilship', '.gitignore');
+  if (!fs.existsSync(gi)) { fs.writeFileSync(gi, GITIGNORE); written.push('.untilship/.gitignore'); }
+  return { dir, agent, loops: wanted, written };
+}
+
+/** Split a command template into argv, honouring simple quotes. */
+function splitCmd(s) {
+  const out = []; let cur = ''; let q = null; let any = false;
+  for (const c of String(s)) {
+    if (q) { if (c === q) q = null; else cur += c; continue; }
+    if (c === '"' || c === "'") { q = c; any = true; continue; }
+    if (/\s/.test(c)) { if (cur || any) { out.push(cur); cur = ''; any = false; } continue; }
+    cur += c;
+  }
+  if (cur || any) out.push(cur);
+  return out;
+}
+
+const DEFAULT_AGENT_CMD = {
+  claude: 'claude -p --permission-mode acceptEdits',
+  codex: 'codex exec --sandbox workspace-write',
+  cursor: 'cursor-agent -p --force',
+};
+
+function firstPrompt(run, loopBody) {
+  return [
+    `You are running the UntilShip loop "${run.config.title}" (run ${run.runId}).`,
+    'Follow the loop below. A script checks the stop condition after you finish; you cannot declare success.',
+    'Do not edit .untilship/, hook config, or the protected files listed in the loop. When you believe the check passes, finish.',
+    `Stop condition: ${run.config.checks.join(' && ')}`,
+    '',
+    loopBody.trim(),
+  ].join('\n');
+}
+
+function runLoop(args) {
+  const ref = args._[0];
+  if (!ref) throw new Error('run needs a loop name');
+  const agent = args.agent;
+  if (!args['agent-cmd'] && !AGENTS.includes(agent)) throw new Error(`--agent must be one of ${AGENTS.join(', ')} (or pass --agent-cmd)`);
+  const dir = path.resolve(args.dir || '.');
+  const st = engine.status(dir);
+  let run;
+  if (st.active) {
+    if (st.loop !== path.basename(ref)) throw new Error(`another loop is active (${st.loop}); abort it first`);
+    run = JSON.parse(fs.readFileSync(path.join(dir, '.untilship', 'runs', st.runId, 'run.json'), 'utf8'));
+  } else {
+    run = engine.start(dir, ref, { vars: args.set, agent: `runner:${agent || 'custom'}` });
+  }
+  const loopFile = path.join(dir, run.config.loopFile);
+  const body = engine.parseFrontmatter(fs.readFileSync(loopFile, 'utf8')).body;
+  const argv = splitCmd(args['agent-cmd'] || DEFAULT_AGENT_CMD[agent]);
+  let prompt = firstPrompt(run, body);
+  const log = (s) => process.stderr.write(`[untilship] ${s}\n`);
+  let lapsRun = run.laps.length;
+  log(`run ${run.runId}: "${run.config.name}", up to ${run.config.maxLaps} laps, agent: ${argv.join(' ')}`);
+  for (;;) {
+    const r = cp.spawnSync(argv[0], [...argv.slice(1), prompt], {
+      cwd: dir, stdio: ['ignore', 'inherit', 'inherit'], shell: process.platform === 'win32',
+      env: Object.assign({}, process.env, { UNTILSHIP_RUNNER: '1' }),
+    });
+    if (r.error) throw new Error(`could not start agent "${argv[0]}": ${r.error.message}`);
+    if (r.status !== 0) log(`agent exited ${r.status}; checking anyway`);
+    // every lap after the first is a re-entry: the agent was sent back by the check
+    const d = engine.evaluate(dir, { agent: 'runner', input: { stop_hook_active: lapsRun > 0 } });
+    lapsRun++;
+    if (d.action === 'allow') { log(d.message || d.status); return d.status === 'passed' ? 0 : 3; }
+    log(`lap ${d.lap} failed; re-invoking the agent`);
+    prompt = `${d.reason}\n\nContinue the loop. The original instructions are in ${run.config.loopFile}.`;
+  }
+}
+
+const HELP = `untilship: agent loops with a stop condition enforced outside the model.
+
+  untilship list                                   loops in this package
+  untilship pull [loop ...] --agent <a> [--dir .]  install loops + stop hook (default: all free loops)
+  untilship run <loop> --agent <a> [--agent-cmd "<cmd>"] [--set k=v] [--dir .]
+                                                   headless runner: re-invokes the agent until the check passes
+  untilship start|status|peek|abort|eval ...       passthrough to untilship-check (in --dir)
+Agents: ${AGENTS.join(', ')}`;
+
+function main(argv) {
+  let a;
+  try { a = parseArgs(argv); } catch (e) { process.stderr.write(e.message + '\n'); return 2; }
+  const cmd = a._.shift();
+  try {
+    if (!cmd || a.help || cmd === 'help') { process.stdout.write(HELP + '\n'); return cmd ? 0 : 2; }
+    if (cmd === 'list') {
+      const m = manifest();
+      for (const [slug, l] of Object.entries(m.loops)) process.stdout.write(`${slug.padEnd(20)} ${String(l.tier).padEnd(7)} ${l.type.padEnd(8)} stop when ${l.stopWhen}\n`);
+      return 0;
+    }
+    if (cmd === 'pull') {
+      const r = pull(a);
+      process.stdout.write(`Installed ${r.loops.length} loop(s) for ${r.agent} into ${r.dir}:\n${r.written.map((w) => '  ' + w).join('\n')}\n` +
+        `Next: open the repo in ${r.agent} and invoke /untilship-<loop>. Commit .untilship/ (runs/ holds reports).\n`);
+      return 0;
+    }
+    if (cmd === 'run') return runLoop(a);
+    if (['start', 'status', 'peek', 'abort', 'eval', 'hook'].includes(cmd)) {
+      const rest = argv.slice(argv.indexOf(cmd) + 1).filter((x, i, arr) => x !== '--dir' && arr[i - 1] !== '--dir');
+      return engine.main([cmd, ...rest, '--root', path.resolve(a.dir || '.')]);
+    }
+  } catch (e) {
+    process.stderr.write(`untilship: ${e.message}\n`);
+    return 2;
+  }
+  process.stderr.write(HELP + '\n');
+  return 2;
+}
+
+module.exports = { pull, mergeHook, splitCmd, runLoop, main };
+
+if (require.main === module) process.exitCode = main(process.argv.slice(2));

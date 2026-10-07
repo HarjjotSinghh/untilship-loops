@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.untilship/bin/untilship-check.cjs\" hook --agent codex",
+            "timeout": 3600,
+            "statusMessage": "UntilShip: checking the stop condition"
+          }
+        ]
+      }
+    ]
+  }
+}

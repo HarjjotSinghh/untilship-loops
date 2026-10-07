@@ -1,0 +1,161 @@
+{
+  "version": "0.1.0",
+  "loops": {
+    "aeo-setup": {
+      "title": "AEO setup",
+      "tier": "Growth",
+      "type": "command",
+      "stopWhen": "llms.txt is well-formed, AGENTS.md exists, every JSON-LD block validates, robots.txt lets the chosen AI crawlers in, and the sitemap is reachable",
+      "maxLaps": 8,
+      "files": [
+        "aeo-check.mjs",
+        "jsonld-validate.mjs",
+        "loop.md"
+      ]
+    },
+    "dependency-upgrade": {
+      "title": "Dependency upgrade",
+      "tier": "Ship",
+      "type": "command",
+      "stopWhen": "the new version is declared and installed, and the build, type check and full test suite pass on it",
+      "maxLaps": 8,
+      "files": [
+        "loop.md",
+        "verify-version.mjs"
+      ]
+    },
+    "idea-to-mvp": {
+      "title": "Idea → MVP",
+      "tier": "Ship",
+      "type": "command",
+      "stopWhen": "every item in the acceptance checklist passes its own shell check",
+      "maxLaps": 8,
+      "files": [
+        "checklist.mjs",
+        "loop.md"
+      ]
+    },
+    "launch-post": {
+      "title": "Launch post",
+      "tier": "Growth",
+      "type": "panel",
+      "stopWhen": "every hard gate passes and the panel's weighted score clears the threshold",
+      "maxLaps": 6,
+      "files": [
+        "loop.md",
+        "rubric.md",
+        "score-prompt.md",
+        "score.mjs"
+      ]
+    }
+  },
+  "agents": {
+    "claude": {
+      "hook": {
+        "file": ".claude/settings.untilship.json",
+        "mergeInto": ".claude/settings.json"
+      },
+      "common": [
+        ".untilship/bin/untilship-check.cjs",
+        ".claude/settings.untilship.json"
+      ],
+      "loops": {
+        "aeo-setup": [
+          ".untilship/loops/aeo-setup/aeo-check.mjs",
+          ".untilship/loops/aeo-setup/jsonld-validate.mjs",
+          ".untilship/loops/aeo-setup/loop.md",
+          ".claude/skills/untilship-aeo-setup/SKILL.md"
+        ],
+        "dependency-upgrade": [
+          ".untilship/loops/dependency-upgrade/loop.md",
+          ".untilship/loops/dependency-upgrade/verify-version.mjs",
+          ".claude/skills/untilship-dependency-upgrade/SKILL.md"
+        ],
+        "idea-to-mvp": [
+          ".untilship/loops/idea-to-mvp/checklist.mjs",
+          ".untilship/loops/idea-to-mvp/loop.md",
+          ".claude/skills/untilship-idea-to-mvp/SKILL.md"
+        ],
+        "launch-post": [
+          ".untilship/loops/launch-post/loop.md",
+          ".untilship/loops/launch-post/rubric.md",
+          ".untilship/loops/launch-post/score-prompt.md",
+          ".untilship/loops/launch-post/score.mjs",
+          ".claude/skills/untilship-launch-post/SKILL.md"
+        ]
+      }
+    },
+    "codex": {
+      "hook": {
+        "file": ".codex/hooks.untilship.json",
+        "mergeInto": ".codex/hooks.json"
+      },
+      "common": [
+        ".untilship/bin/untilship-check.cjs",
+        ".codex/hooks.untilship.json",
+        "AGENTS.untilship.md"
+      ],
+      "loops": {
+        "aeo-setup": [
+          ".untilship/loops/aeo-setup/aeo-check.mjs",
+          ".untilship/loops/aeo-setup/jsonld-validate.mjs",
+          ".untilship/loops/aeo-setup/loop.md",
+          ".agents/skills/untilship-aeo-setup/SKILL.md"
+        ],
+        "dependency-upgrade": [
+          ".untilship/loops/dependency-upgrade/loop.md",
+          ".untilship/loops/dependency-upgrade/verify-version.mjs",
+          ".agents/skills/untilship-dependency-upgrade/SKILL.md"
+        ],
+        "idea-to-mvp": [
+          ".untilship/loops/idea-to-mvp/checklist.mjs",
+          ".untilship/loops/idea-to-mvp/loop.md",
+          ".agents/skills/untilship-idea-to-mvp/SKILL.md"
+        ],
+        "launch-post": [
+          ".untilship/loops/launch-post/loop.md",
+          ".untilship/loops/launch-post/rubric.md",
+          ".untilship/loops/launch-post/score-prompt.md",
+          ".untilship/loops/launch-post/score.mjs",
+          ".agents/skills/untilship-launch-post/SKILL.md"
+        ]
+      }
+    },
+    "cursor": {
+      "hook": {
+        "file": ".cursor/hooks.untilship.json",
+        "mergeInto": ".cursor/hooks.json"
+      },
+      "common": [
+        ".untilship/bin/untilship-check.cjs",
+        ".cursor/hooks.untilship.json",
+        "AGENTS.untilship.md"
+      ],
+      "loops": {
+        "aeo-setup": [
+          ".untilship/loops/aeo-setup/aeo-check.mjs",
+          ".untilship/loops/aeo-setup/jsonld-validate.mjs",
+          ".untilship/loops/aeo-setup/loop.md",
+          ".cursor/skills/untilship-aeo-setup/SKILL.md"
+        ],
+        "dependency-upgrade": [
+          ".untilship/loops/dependency-upgrade/loop.md",
+          ".untilship/loops/dependency-upgrade/verify-version.mjs",
+          ".cursor/skills/untilship-dependency-upgrade/SKILL.md"
+        ],
+        "idea-to-mvp": [
+          ".untilship/loops/idea-to-mvp/checklist.mjs",
+          ".untilship/loops/idea-to-mvp/loop.md",
+          ".cursor/skills/untilship-idea-to-mvp/SKILL.md"
+        ],
+        "launch-post": [
+          ".untilship/loops/launch-post/loop.md",
+          ".untilship/loops/launch-post/rubric.md",
+          ".untilship/loops/launch-post/score-prompt.md",
+          ".untilship/loops/launch-post/score.mjs",
+          ".cursor/skills/untilship-launch-post/SKILL.md"
+        ]
+      }
+    }
+  }
+}
