@@ -165,7 +165,139 @@ major, and checks every installed copy (per workspace, nested and pnpm store) wi
 A build that fails because a tool such as `cargo` is missing is now named as an environment
 problem in the lap message and the blocked report, with the `--set build=...` to scope it.
 
-A re-run on the same base commit with 0.1.2 will be added below.
+The re-run on the same base commit with 0.1.2 is below.
+
+### Re-run with 0.1.2
+
+**Result: PASSED on lap 1.** Same repo, base commit, container and model as the first run, with
+`untilship@0.1.2` and the workspace-scoped commands its docs recommend for a monorepo like this
+one. The version check read the workspaces and passed. The agent finished the upgrade before
+its first stop, and the Stop hook let it stop on the first lap.
+
+Cost: **$0.26** (API-equivalent, billed to a Claude subscription). Time: **2 min 13 s**.
+
+Raw files: [`2026-10-07-helicon-react-19/rerun-0.1.2/`](2026-10-07-helicon-react-19/rerun-0.1.2/)
+
+> Same honesty note as above: one run, a task I chose, my own repo. It shows the 0.1.2 fix
+> works on the case that broke 0.1.1. It does not show the loop makes the agent better: this
+> agent passed on lap 1, so the hook only confirmed what it had already done.
+
+#### Exact commands
+
+Setup was the same as the first run, with only the package version changed. Fresh clone at
+`fb92275` on `untilship/r1`, push URL disabled, `npm ci`, then:
+
+```bash
+npx -y untilship@0.1.2 pull --agent claude      # writes .claude/skills/, .claude/settings.json (Stop hook), .untilship/
+git add -A && git commit -m "chore: add UntilShip loops (npx untilship@0.1.2 pull --agent claude)"
+```
+
+The installed `SKILL.md` says the loop is started with
+`untilship-check start dependency-upgrade --set ...`, so the prompt gave the agent that exact
+command. The flags were the same as the first run:
+
+```bash
+claude -p '/untilship-dependency-upgrade Start the loop with exactly: node .untilship/bin/untilship-check.cjs start dependency-upgrade --set package=react --set target=^19 --set build="npm run build -w @helicon/ui -w @helicon/web" --set typecheck="npx --no-install tsc --noEmit -p packages/ui/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.test.json" (upgrade React 18 to 19 in @helicon/ui and @helicon/web: react, react-dom, @types/react, @types/react-dom)' \
+  --model claude-opus-5-5 \
+  --output-format stream-json --verbose \
+  --permission-mode bypassPermissions \
+  --setting-sources project \
+  --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
+  --disallowedTools "Bash(git push:*)" "Bash(gh:*)" \
+  --max-budget-usd 15
+```
+
+The agent ran that `start` command as given. The `--set` values recorded in
+[run.json](2026-10-07-helicon-react-19/rerun-0.1.2/run.json):
+
+| var | value |
+|---|---|
+| `package` | `react` |
+| `target` | `^19` |
+| `build` | `npm run build -w @helicon/ui -w @helicon/web` |
+| `typecheck` | `npx --no-install tsc --noEmit -p packages/ui/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.test.json` |
+| `test` | `npm test` (default) |
+
+Environment: same as the first run (Claude Code 2.1.289, `claude-opus-5-5` at default effort,
+Docker on Debian bookworm, Node 22.23.3, npm 10.9.9, no Rust, no git credentials, caps $15 and
+60 min, neither reached), except `untilship@0.1.2` and `untilship-check` 0.1.2.
+
+#### What happened
+
+**Turn 1 (before any lap, ~2 min).** The agent ran the `start` command, then bumped the four
+packages to `^19.2.0` in `packages/ui` and `apps/web` and ran `npm install`. As in the first run,
+npm left React 18.3.1 hoisted at the root. The agent traced it with `npm explain` and removed
+it with `npm dedupe`, which left one copy of 19.3.0. It then ran `untilship-check peek`, which
+uses no lap. The version check passed, and the scoped build failed on the same three type
+errors as the first run (two `RefObject<T>` props, one global `JSX` namespace). It committed
+the bump, searched both packages for APIs React 19 removed (it found none), fixed the three
+lines and committed again. Then it ended its turn.
+
+| Lap | What the Stop hook ran | Exit | What it said |
+|---|---|---|---|
+| 1 | `verify-version.mjs react ^19` | 0 | `declared=^19.2.0 installed=19.3.0` · `ok declared apps/web/package.json`, `ok declared packages/ui/package.json`, `ok installed node_modules/react 19.3.0` · `VERSION OK` (0.0 s) |
+| | `npm run build -w @helicon/ui -w @helicon/web` | 0 | built (12.8 s) |
+| | the three `tsc --noEmit` checks | 0 | clean (9.6 s) |
+| | `npm test` | 0 | passed (15.0 s); the lap keeps only the output tail, and the same command re-run after the session counted 446 tests, 0 failing |
+| | **PASSED on lap 1/8** | | no protected-file changes |
+
+All four commands ran inside the loop this time. The run did not test the new stale-copy
+detection: the agent removed the leftover 18.3.1 itself before the first check.
+
+#### Final result
+
+- **UntilShip:** `passed`, 1 of 8 laps, run time 2.1 min.
+  [report.md](2026-10-07-helicon-react-19/rerun-0.1.2/report.md),
+  [run.json](2026-10-07-helicon-react-19/rerun-0.1.2/run.json).
+- **Stop condition re-run after the session** (the same four commands, outside the agent): all
+  exit 0. [final-check.log](2026-10-07-helicon-react-19/rerun-0.1.2/final-check.log) (trimmed).
+- **Stricter check for this repo** (the same one as the first run, never shown to the agent):
+  `npm ci` ok, only 19.x of the four packages with `npm ls` clean, the CI build and test steps
+  pass, 445/445 tests, no suppressions. It reports `fails:1/6` for the same reason as the first
+  run: `.untilship/.gitignore`, which `untilship pull` added before the agent started. The agent
+  did not change any protected file.
+  [independent-check.log](2026-10-07-helicon-react-19/rerun-0.1.2/independent-check.log).
+- Guards: no protected file changed, no test file edited, no skip or suppression markers added.
+
+#### Diff summary
+
+Two agent commits (`Bump react, react-dom and their types to ^19 in @helicon/ui and @helicon/web`,
+then `Fix React 19 type breakage: nullable RefObject and removed global JSX namespace`):
+
+```text
+ apps/web/package.json                          |  8 +--
+ package-lock.json                              | 87 +++++++++-----------------
+ packages/ui/package.json                       |  8 +--
+ packages/ui/src/components/sidebar/Sidebar.tsx |  4 +-
+ packages/ui/src/components/ui/Toasts.tsx       |  3 +-
+ 5 files changed, 43 insertions(+), 67 deletions(-)
+```
+
+The same five files as the first run, and the same three source-line fixes. The ranges are
+`^19.2.0` instead of `^19.3.0`. The lockfile also moves `lru-cache` 11.5.2 → 11.5.3 as a side
+effect of `npm dedupe`. [changes.diff](2026-10-07-helicon-react-19/rerun-0.1.2/changes.diff),
+[lockfile-summary.txt](2026-10-07-helicon-react-19/rerun-0.1.2/lockfile-summary.txt).
+
+#### Cost and time
+
+| | First run (0.1.1) | Re-run (0.1.2) |
+|---|---|---|
+| Result | blocked, 3 laps | **passed, 1 lap** |
+| Session wall time | 158 s | 133 s |
+| Loop run (start → end) | 2.2 min | 2.1 min |
+| Turns | 22 | 11 |
+| `total_cost_usd` | $0.537 | $0.257 |
+
+Costs are API-equivalent, billed to the founder's Claude subscription.
+
+Re-run raw files: [report.md](2026-10-07-helicon-react-19/rerun-0.1.2/report.md) (UntilShip's
+report, unedited), [run.json](2026-10-07-helicon-react-19/rerun-0.1.2/run.json),
+[final-check.log](2026-10-07-helicon-react-19/rerun-0.1.2/final-check.log),
+[independent-check.log](2026-10-07-helicon-react-19/rerun-0.1.2/independent-check.log),
+[changes.diff](2026-10-07-helicon-react-19/rerun-0.1.2/changes.diff),
+[lockfile-summary.txt](2026-10-07-helicon-react-19/rerun-0.1.2/lockfile-summary.txt),
+[transcript-excerpt.jsonl](2026-10-07-helicon-react-19/rerun-0.1.2/transcript-excerpt.jsonl)
+(the prompt, the agent's text messages, the Stop hook's verdict and the final result event).
 
 ## Raw files
 

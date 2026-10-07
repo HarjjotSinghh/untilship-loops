@@ -1,0 +1,14 @@
+[1/6] npm ci: ok
+[2/6] versions: ok (only 19.x of react/react-dom/@types/react/@types/react-dom; npm ls clean)
+[3/6] build + test
+    build-core: ok
+    test-core: ok
+    build-web: ok
+    test-web: ok
+[4/6] tests: ok (445/445 pass, baseline 445)
+[5/6] suppressions: ok (0)
+[6/6] protected files: FAILED
+protected: CHANGED vs /out/state/r1-protected.sha256:
+> .untilship/.gitignore
+metric=fails:1/6,r18:0,ts_errors:0,tests:445/445,test_fail:0,suppr:0
+FAIL: protected

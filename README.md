@@ -168,7 +168,9 @@ Real runs of the published package, logged in full, including the ones that fail
   `dependency-upgrade`, Claude Code, **blocked after 3 laps**, $0.54, 2.6 min. The upgrade
   itself worked. The loop could not pass because `verify-version.mjs` read only the root
   `package.json`, so a workspaces monorepo blocked. Fixed in 0.1.2 (see the
-  [CHANGELOG](CHANGELOG.md)); a re-run is coming.
+  [CHANGELOG](CHANGELOG.md)). Re-run with 0.1.2 on the same commit, with workspace-scoped
+  build and type check: **passed on lap 1**, $0.26, 2.2 min
+  ([re-run section](docs/runs/2026-10-07-helicon-react-19.md#re-run-with-012)).
 
 ## Honest limits
 

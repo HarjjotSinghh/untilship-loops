@@ -1,0 +1,47 @@
+# Stop condition re-run after the session, outside the agent: the four commands from run.json, in order.
+# Output trimmed to the last 12 lines per command (full log is ~3,300 lines, mostly build and test output).
+
+$ node ".untilship/loops/dependency-upgrade/verify-version.mjs" "react" "^19"
+VERSION react: declared=^19.2.0 installed=19.3.0 target=^19
+  workspaces: 6 (from package.json workspaces)
+  ok   declared  apps/web/package.json dependencies "^19.2.0"
+  ok   declared  packages/ui/package.json dependencies "^19.2.0"
+  ok   installed node_modules/react 19.3.0
+VERSION OK
+exit 0
+
+$ npm run build -w @helicon/ui -w @helicon/web
+  [... 25 lines trimmed ...]
+dist/assets/index-C82CgLp5.css                                       74.57 kB │ gzip:  16.94 kB
+dist/assets/index-CBJkZwne.js                                     1,404.94 kB │ gzip: 406.74 kB
+(!) Some chunks are larger than 1200 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.23s
+npm notice
+npm notice New major version of npm available! 10.9.9 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+exit 0
+
+$ npx --no-install tsc --noEmit -p packages/ui/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.test.json
+exit 0
+
+$ npm test
+  [summary from the full log: 5 node:test runs, daemon 49 + server 123 + ui 263 + vscode extension 1 + web 10 = 446 tests, 0 failing]
+  [... 3258 lines trimmed ...]
+  duration_ms: 1228.39061
+  type: 'suite'
+  ...
+1..2
+# tests 10
+# suites 2
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1288.4022
+exit 0

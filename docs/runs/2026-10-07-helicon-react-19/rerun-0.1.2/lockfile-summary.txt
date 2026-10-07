@@ -1,0 +1,20 @@
+package-lock.json diff summary (full diff omitted)
+
+ package-lock.json | 87 +++++++++++++++++---------------------------------
+ 1 file changed, 32 insertions(+), 57 deletions(-)
+
+Hoisted versions changed:
+  react             18.3.1  -> 19.3.0
+  react-dom         18.3.1  -> 19.3.0
+  @types/react      18.3.31 -> 19.3.0
+  @types/react-dom  18.3.7  -> 19.3.0
+  scheduler         0.23.2  -> 0.28.0
+  lru-cache         11.5.2  -> 11.5.3   (side effect of `npm dedupe`, not React-related)
+
+Entries removed (no longer needed by React 19):
+  node_modules/@types/prop-types  (15.7.15)
+  node_modules/loose-envify       (1.4.0)
+
+js-tokens is now marked "dev": true (loose-envify, which depended on it, is gone).
+Workspace ranges for packages/ui and apps/web updated to ^19.2.0 to match their package.json.
+Result: one copy of React (19.3.0) in the tree, no 18.x left, `npm ls` clean (independent check step 2/6).

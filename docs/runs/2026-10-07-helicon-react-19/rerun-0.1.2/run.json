@@ -1,0 +1,271 @@
+{
+  "version": "0.1.2",
+  "runId": "20261007-105359-dependency-upgrade-d8c4",
+  "status": "passed",
+  "agent": "claude",
+  "startedAt": "2026-10-07T10:53:59.992Z",
+  "endedAt": "2026-10-07T10:56:08.589Z",
+  "config": {
+    "name": "dependency-upgrade",
+    "title": "Dependency upgrade",
+    "tier": "Ship",
+    "type": "command",
+    "stopWhen": "the new version is declared and installed, and the build, type check and full test suite pass on it",
+    "checks": [
+      "node \".untilship/loops/dependency-upgrade/verify-version.mjs\" \"react\" \"^19\"",
+      "npm run build -w @helicon/ui -w @helicon/web",
+      "npx --no-install tsc --noEmit -p packages/ui/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.test.json",
+      "npm test"
+    ],
+    "metric": null,
+    "metricName": "metric",
+    "maxLaps": 8,
+    "timeoutS": 1200,
+    "stallLimit": 2,
+    "protect": [
+      ".untilship/bin/**",
+      ".untilship/loops/**",
+      ".claude/settings.json",
+      ".claude/settings.local.json",
+      ".codex/hooks.json",
+      ".codex/config.toml",
+      ".cursor/hooks.json",
+      "jest.config.*",
+      "vitest.config.*",
+      "vitest.workspace.*",
+      "playwright.config.*",
+      "karma.conf.*",
+      ".mocharc*",
+      ".nycrc*",
+      ".c8rc*",
+      "codecov.yml",
+      "tsconfig*.json",
+      ".untilship/loops/dependency-upgrade/**"
+    ],
+    "protectExisting": [
+      "**/{test,tests,__tests__,spec,specs,e2e,__snapshots__}/**",
+      "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
+      "**/{test_*.py,*_test.py,*_test.go,*_spec.rb,*_test.rb}",
+      "**/{*Test,*Tests}.{java,kt,cs,swift}"
+    ],
+    "protectJson": [
+      "package.json#scripts",
+      "package.json#jest",
+      "package.json#mocha",
+      "package.json#ava",
+      "package.json#nyc",
+      "package.json#c8"
+    ],
+    "forbid": [
+      "\\b(?:it|test|describe|context|suite|specify|bench)\\.(?:skip|only|todo|skipIf|runIf)\\b",
+      "\\bx(?:it|test|describe|context|specify)\\(",
+      "\\bthis\\.skip\\(\\)",
+      "@ts-ignore",
+      "@ts-expect-error",
+      "@ts-nocheck",
+      "eslint-disable",
+      "biome-ignore",
+      "\\b(?:istanbul|c8|v8) ignore\\b",
+      "#\\s*pragma:\\s*no\\s*cover",
+      "@pytest\\.mark\\.(?:skip|skipif|xfail)\\b",
+      "\\bpytest\\.(?:skip|xfail)\\(",
+      "@unittest\\.(?:skip|skipIf|skipUnless|expectedFailure)\\b",
+      "\\.skipTest\\(",
+      "#\\s*type:\\s*ignore",
+      "\\b[tb]\\.Skip(?:Now|f)?\\(",
+      "#\\[ignore\\b",
+      "@(?:Disabled|Ignore)\\b",
+      "(?:^|\\n)[ \\t]*script-shell[ \\t]*="
+    ],
+    "forbidIn": [
+      "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,py,rb,go,rs,java,kt,swift,vue,svelte,php,cs}",
+      ".npmrc"
+    ],
+    "vars": {
+      "package": "react",
+      "target": "^19",
+      "build": "npm run build -w @helicon/ui -w @helicon/web",
+      "typecheck": "npx --no-install tsc --noEmit -p packages/ui/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.test.json",
+      "test": "npm test",
+      "protect_tests": "@tests",
+      "loop_dir": ".untilship/loops/dependency-upgrade",
+      "run_id": "20261007-105359-dependency-upgrade-d8c4",
+      "run_dir": ".untilship/runs/20261007-105359-dependency-upgrade-d8c4"
+    },
+    "loopFile": ".untilship/loops/dependency-upgrade/loop.md",
+    "loopSha": "4532b11268038b85bb7cd3fa2998199c76c20336f5727bfdfe29ca5b7f704400"
+  },
+  "baseline": {
+    "protected": {
+      ".claude/settings.json": "23dbddadc33fe2d3fb4f938c5fea854e4c94351630425f9559fd0400068fb461",
+      ".untilship/bin/untilship-check.cjs": "85899d7c3b91b0aaa9726be48225ee8a1c2c032ecac31c04ee3b4572fe26d7df",
+      ".untilship/loops/aeo-setup/aeo-check.mjs": "39b3a52d9ba253e0b84b729351259a7aa57390cbf8e8008a26eee3d07ebe2419",
+      ".untilship/loops/aeo-setup/jsonld-validate.mjs": "f9f1022e65ac6cdf965e5fd0f372ecef3436ab668d511b56bce5aa06f6d0453e",
+      ".untilship/loops/aeo-setup/loop.md": "361d56aa38e2372c64ce572a0d8178af190cf6641d51a2ce77d7587fcbc1c58e",
+      ".untilship/loops/dependency-upgrade/loop.md": "4532b11268038b85bb7cd3fa2998199c76c20336f5727bfdfe29ca5b7f704400",
+      ".untilship/loops/dependency-upgrade/verify-version.mjs": "e266d2acef7edcb6ebf86840734d7eb0fc2126dc1818a57864ad7d8655533ee4",
+      ".untilship/loops/idea-to-mvp/checklist.mjs": "0e9712f455e3d78037154e0d5b9eb1ba598109a7762b466ef38ae1d62002eed1",
+      ".untilship/loops/idea-to-mvp/loop.md": "71f0dcd62c3ab193b913765333228994a24d04d40719255c4893cf4a64da2597",
+      ".untilship/loops/launch-post/loop.md": "35ea021f93c09a43deaae56ccc9b2641f3923b6e547d02e27ff24cea0279544c",
+      ".untilship/loops/launch-post/rubric.md": "f78b909bb55c83816a5576794484e6fbf81069918d9fc87f0d31901620e8ca07",
+      ".untilship/loops/launch-post/score-prompt.md": "35f7e03f86075384b881ca56c8a99203c2029d9a30fa9bb1d504b188c37f712e",
+      ".untilship/loops/launch-post/score.mjs": "278ace53c8bd20ded131536bd6d2a1325105150fc8551f0ffaf3443724302499",
+      "apps/vscode/tsconfig.json": "74cc3dad07941a70c6de9b104f546921147b64da27664d0209b840aae67ef8f6",
+      "apps/web/tsconfig.json": "448b1b46fbcb7025f1c677267981d3234980761371d9f86166693190fe724e8f",
+      "apps/web/tsconfig.test.json": "b98278a4ab7999ec957e920ec458531064c1f66a655ed1da548fccb020600635",
+      "landing/tsconfig.json": "5c51df4c59f4510d8c7dadf07a5c32132228826a3b331da5e286207b4df7ef9c",
+      "landing/vitest.config.ts": "1574df6c3b4c20d8c41de444f623c67a9cc330d5635f1c1cbe50523dcb27f62c",
+      "packages/daemon/tsconfig.json": "e192a462c5d5e08b0809f9eeb74f5addb2209c17d0df91f0ee45fbbdf58dd8e9",
+      "packages/server/tsconfig.json": "e192a462c5d5e08b0809f9eeb74f5addb2209c17d0df91f0ee45fbbdf58dd8e9",
+      "packages/ui/tsconfig.json": "f71edb346bd16bee894dc25648db60b2a193b889727f49cdb03874d54e0dc575",
+      "tsconfig.base.json": "34fbfdc00d8102f80ade3c86fd132e1998a32d32f4983844506c4006108eb2a3"
+    },
+    "protectedExisting": {
+      "apps/vscode/test/integration/run.mjs": "7e1ade0124c1c70486c876bac21d95696f5fb48fa87c0fc888897c07ea2a96f1",
+      "apps/vscode/test/integration/suite.cjs": "1bdcf4fa28aa9968dc51b7f552c7fb4d1cec878ff6f9e9e18702a5e0d2e00209",
+      "apps/vscode/test/server.test.mjs": "40c109ac7aa6f9337b4756ef6251d4cf274bc7a330d96ee628dcb7cd005e3c01",
+      "apps/web/test/links.test.ts": "2f15a6ff5a7241d3266c8045509c89b22c0d095f1a05d9848bc9e9b91b49396d",
+      "apps/web/test/webClient.test.ts": "76694b266cff40427b09c0780eeb45b6de8d8f3438bae05ca4254d1a6675a5f6",
+      "landing/test/analytics.test.ts": "d48dcd4c511819bcb73046888daa18d064b298479012d1ba1019f6ab140469b4",
+      "landing/test/api-router.test.ts": "969cdd159012df80936e4fbf8c0247cd480390d73718548a32c9287b9438e302",
+      "landing/test/company-pages.test.ts": "c4614e5a27f0eab470bf27576387b938b86b08c37cd7ff36f1f2b099c7bc1058",
+      "landing/test/demo-video.test.ts": "7a60c436bdd39ee7643239a073508fc3f43a50df8965183da1bf18b2904c0526",
+      "landing/test/markdown-negotiation.test.ts": "c54248c9fd51a67c9b4304aa29cd8b0d9c455a105321f719da5f61d101762c3e",
+      "landing/test/markdown.test.ts": "36ec865e5a22bfe94d29fb51574f0697eb2202bddfba39957b43537211412740",
+      "landing/test/openapi.test.ts": "96467d48dd37afd7343a64793cfc7c774722a131337d67fa60d0205d19c78926",
+      "landing/test/schema.test.ts": "72e4056453bb8ca6943aff54db25bf58a0af7519187181cec77157598ccb1ea6",
+      "landing/test/yaml.test.ts": "5b0e6ecb28f91a2f667e8ffdcc00a2fcacea303e678216734f14e8cc64301a80",
+      "packages/daemon/test/mspHost.test.ts": "3ccf2e59aacc5c6948eae9e41570430a84df5aa22a973b3cea3d09114de4b451",
+      "packages/daemon/test/native.test.ts": "c13acc627414d85c2b11d0116d297b6fcbe34ddd5b059b2b2797c5d08ad69022",
+      "packages/daemon/test/sessions.test.ts": "6e12fcae2fa6690a3d2a58d8f8b24668f72ff1517afdb6892bd063472b20c536",
+      "packages/daemon/test/store.test.ts": "0a62e8b5dd7dd87754d75f1f42370bde5cd98496817c62b55500ce3d7b00253e",
+      "packages/daemon/test/wsl.test.ts": "b8985aeb33bde03b187fa52570d4394d71b444454c7fceb4df133a8e57294844",
+      "packages/server/test/paths.test.ts": "a7db78a3d5b40f950f7dbc51601c5b22b92500b5a2e5eb414c315b6573ec3db0",
+      "packages/server/test/server.test.ts": "3b86bbb2bcba10b29413e552157b8425975edbd866aeda0b5ea231fa615d4c36",
+      "packages/server/test/ssh.test.ts": "1ed05ef436114c8a5500d770b1408560e0b907d58a326e7e7a04024fd1ad3c2a",
+      "packages/server/test/threadTitles.test.ts": "21a10a12d5b18e47a321d0b8da706d28a6fa4075c02a3bfac8402a6dcb27ea05",
+      "packages/ui/test/announce.test.ts": "7a4a15f1b8c4a4908837ff878b0a267bbcbdcaa471190f7aa8713a50087b1196",
+      "packages/ui/test/changelog.test.ts": "de4ab59cd5a07e9c145b124250c163ca33c933f73b956dc6261478ae929ef5a9",
+      "packages/ui/test/controller.test.ts": "4183db3f4ee811b3885f54e6cfd0271a709c230a1b960752f22aaeb3036532b4",
+      "packages/ui/test/editor-extension.test.ts": "dd5b397147f0af27214253b9181bbaa638bfb4232013022065992688e95adfb1",
+      "packages/ui/test/errors.test.ts": "ce91d18609d57d915f7acae7000975da7e4f293482ebe387a33ae0af79245d9a",
+      "packages/ui/test/files.test.ts": "19e8934bf4bb92d3aa037be8a2b20a610c734b9761e079f9696da15e6ff4291f",
+      "packages/ui/test/fixtures/probe.ts": "4bf83810c615f52d5bc4f5375931d3d968bcb3ffc040b37213373db401bcd783",
+      "packages/ui/test/fold.test.ts": "8eba22091d3c0acecff6e85287c33caafca749b0d8d91eec17fc818727cc6db8",
+      "packages/ui/test/format.test.ts": "f1cebf6d1a8c1ef22a06b904f2d537f401fce419276d8b92b1d271270595d877",
+      "packages/ui/test/goal.test.ts": "0031b813736f38299d71e26c43249d330902d05aa5887f7fc0d86292a6b2a010",
+      "packages/ui/test/host.test.ts": "0a34ed18085ef89aaff900edede857a6824ce4fcbc4ce07e20e0906c2825e4c8",
+      "packages/ui/test/logo.test.ts": "eddcabd5625300acdbe906e31c32c810f29caf8665f566663a52a5b390bb85d7",
+      "packages/ui/test/monitor.test.ts": "cbca511913437cd1155f6003d3a1ff807b2291c23a0ed3153c5881714ead9651",
+      "packages/ui/test/notify.test.ts": "b28051abd0cb35886df4b9387367b9cb6f8a44fc28b92b47b16bd0224251f4c9",
+      "packages/ui/test/panel.test.ts": "f040fb123133b4d2ccac8a9b9ab1b55c051229dae0a486f198d4b3a1d6861e51",
+      "packages/ui/test/paths.test.ts": "385da523d43346dd617c0c6dfd1415950169f44658364fc841f6f14c8565b348",
+      "packages/ui/test/plan.test.ts": "b19c4c6d5daff89437ce8a36f2dade469c9edb79da991f8070f6f6d0f18a90a5",
+      "packages/ui/test/pricing.test.ts": "701fcf21d6af794b5a29c833b0088d2b81a098ad393192f7f0f0dbcd1cfda828",
+      "packages/ui/test/slash.test.ts": "dbbcfdd6c3f4e5023b672f7745b9c86abc884476261648daeee87027c69a9071",
+      "packages/ui/test/status.test.ts": "6dcc45eb59f1ffa10ad72c5ab0e8fae495ecb2a4684eee4f813563eb046e81f3",
+      "packages/ui/test/streaming.test.ts": "d013530a982f23feea88c1b7e3d6276479431baf679d46723194fa3ccfc7d3fa",
+      "packages/ui/test/telemetry.test.ts": "1338539fe8d773cf714e7dfdf02788eaae069e0cde19879eac52eb4301bdc174",
+      "packages/ui/test/updates.test.ts": "476b0886f1a2eb15b8f4b18a40b5bdc48e475015dddaff50ff3549ba60dfd7e3",
+      "packages/ui/test/usage-range.test.ts": "ad19465030f4c0073d42a30380aa31a5658bf3a6cf2dbb6f47eea744bfb9ff10",
+      "packages/ui/test/usage.test.ts": "1db7ca54fb31c47d6df0ba86e002c94cc5eb9e48c53463e31e10f17d70341701",
+      "packages/ui/test/workflow.test.ts": "440df8fd7c22b8a8d0a3b6b59f7c8a6eaeb91c7d76ea872ba8f02928b47a7054",
+      "packages/ui/test/zoom-shortcut.test.ts": "a62f62e8c6723411c5c117f14119ee518f926346e48e1f86ebb8592d2be4e7ef"
+    },
+    "protectedJson": {
+      "package.json#scripts": {
+        "present": true,
+        "value": {
+          "build": "npm run build --workspaces --if-present",
+          "test": "npm run test --workspaces --if-present"
+        }
+      },
+      "package.json#jest": {
+        "present": false
+      },
+      "package.json#mocha": {
+        "present": false
+      },
+      "package.json#ava": {
+        "present": false
+      },
+      "package.json#nyc": {
+        "present": false
+      },
+      "package.json#c8": {
+        "present": false
+      }
+    },
+    "forbidden": {
+      "landing/src/components/demo-video.tsx": {
+        "eslint-disable": 2
+      },
+      "landing/src/components/font-picker.tsx": {
+        "eslint-disable": 1
+      },
+      "landing/src/lib/og-image.tsx": {
+        "eslint-disable": 1
+      },
+      "packages/server/src/ssh.ts": {
+        "eslint-disable": 1
+      }
+    },
+    "fingerprint": "git:cbcd2918b478f616"
+  },
+  "laps": [
+    {
+      "lap": 1,
+      "at": "2026-10-07T10:56:08.587Z",
+      "agent": "claude",
+      "stopHookActive": false,
+      "exitCode": 0,
+      "passed": true,
+      "durationMs": 37458,
+      "metric": null,
+      "failedCommand": null,
+      "commands": [
+        {
+          "cmd": "node \".untilship/loops/dependency-upgrade/verify-version.mjs\" \"react\" \"^19\"",
+          "exit": 0,
+          "durationMs": 29,
+          "stdoutTail": "VERSION react: declared=^19.2.0 installed=19.3.0 target=^19\n  workspaces: 6 (from package.json workspaces)\n  ok   declared  apps/web/package.json dependencies \"^19.2.0\"\n  ok   declared  packages/ui/package.json dependencies \"^19.2.0\"\n  ok   installed node_modules/react 19.3.0\nVERSION OK\n",
+          "stderrTail": ""
+        },
+        {
+          "cmd": "npm run build -w @helicon/ui -w @helicon/web",
+          "exit": 0,
+          "durationMs": 12809,
+          "stdoutTail": "\n> @helicon/ui@0.21.2 build\n> tsc -p tsconfig.json\n\n\n> @helicon/web@0.21.2 build\n> tsc -p tsconfig.json && vite build\n\nvite v6.4.3 building for production...\ntransforming...\n✓ 5454 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                                                       1.56 kB │ gzip:   0.72 kB\ndist/assets/jetbrains-mono-vietnamese-wght-normal-Bt-aOZkq.woff2      7.50 kB\ndist/assets/jetbrains-mono-greek-wght-normal-Bw9x6K1M.woff2           9.00 kB\ndist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2              10.25 kB\ndist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2               11.23 kB\ndist/assets/jetbrains-mono-cyrillic-wght-normal-D73BlboJ.woff2       12.11 kB\ndist/assets/jetbrains-mono-latin-ext-wght-normal-DBQx-q_a.woff2      15.20 kB\ndist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2                18.75 kB\ndist/assets/inter-greek-wght-normal-CkhJZR-_.woff2                   19.00 kB\ndist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2            25.96 kB\ndist/assets/newsreader-vietnamese-opsz-normal-BjhtXyW2.woff2         27.25 kB\ndist/assets/jetbrains-mono-latin-wght-normal-B9CIFXIH.woff2          40.40 kB\ndist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2                   48.26 kB\ndist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2               85.07 kB\ndist/assets/newsreader-latin-ext-opsz-normal-BQn1nviT.woff2          86.61 kB\ndist/assets/newsreader-latin-opsz-normal-s-izfB6B.woff2             132.00 kB\ndist/assets/index-C82CgLp5.css                                       74.57 kB │ gzip:  16.94 kB\ndist/assets/index-CBJkZwne.js                                     1,404.94 kB │ gzip: 406.74 kB\n✓ built in 4.19s\n",
+          "stderrTail": "\n(!) Some chunks are larger than 1200 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\n"
+        },
+        {
+          "cmd": "npx --no-install tsc --noEmit -p packages/ui/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.json && npx --no-install tsc --noEmit -p apps/web/tsconfig.test.json",
+          "exit": 0,
+          "durationMs": 9592,
+          "stdoutTail": "",
+          "stderrTail": ""
+        },
+        {
+          "cmd": "npm test",
+          "exit": 0,
+          "durationMs": 15027,
+          "stdoutTail": "…dress bar and keeps it\n    ok 1 - takes a token out of the address bar and keeps it\n      ---\n      duration_ms: 1082.64914\n      type: 'test'\n      ...\n    # Subtest: sends the token as a header, never in the path\n    ok 2 - sends the token as a header, never in the path\n      ---\n      duration_ms: 50.869232\n      type: 'test'\n      ...\n    # Subtest: addresses a daemon elsewhere absolutely, and sends its cookie with it\n    ok 3 - addresses a daemon elsewhere absolutely, and sends its cookie with it\n      ---\n      duration_ms: 48.596768\n      type: 'test'\n      ...\n    # Subtest: earns the cookie before opening the stream\n    ok 4 - earns the cookie before opening the stream\n      ---\n      duration_ms: 59.628374\n      type: 'test'\n      ...\n# (node:1566) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time\n# (Use `node --trace-warnings ...` to show where the warning was created)\n    # Subtest: reads and writes the thread-title switch\n    ok 5 - reads and writes the thread-title switch\n      ---\n      duration_ms: 43.846794\n      type: 'test'\n      ...\n    # Subtest: reads and writes the sandbox switch\n    ok 6 - reads and writes the sandbox switch\n      ---\n      duration_ms: 42.633643\n      type: 'test'\n      ...\n    # Subtest: reads and writes the YOLO switch\n    ok 7 - reads and writes the YOLO switch\n      ---\n      duration_ms: 41.392534\n      type: 'test'\n      ...\n    # Subtest: rebuilds a stream that has gone quiet\n    ok 8 - rebuilds a stream that has gone quiet\n      ---\n      duration_ms: 40.454722\n      type: 'test'\n      ...\n    1..8\nok 2 - web client\n  ---\n  duration_ms: 1410.872267\n  type: 'suite'\n  ...\n1..2\n# tests 10\n# suites 2\n# pass 10\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1483.384077\n",
+          "stderrTail": ""
+        }
+      ],
+      "stdoutTail": "…oad or the item\n      ---\n      duration_ms: 0.065334\n      type: 'test'\n      ...\n    # Subtest: copes with a run that has reported nothing yet\n    ok 11 - copes with a run that has reported nothing yet\n      ---\n      duration_ms: 0.051959\n      type: 'test'\n      ...\n    1..11\nok 43 - workflowView\n  ---\n  duration_ms: 2.746849\n  type: 'suite'\n  ...\n# Subtest: zoom shortcut\n    # Subtest: zooms in on Cmd+=, Cmd++, and numpad plus\n    ok 1 - zooms in on Cmd+=, Cmd++, and numpad plus\n      ---\n      duration_ms: 0.381258\n      type: 'test'\n      ...\n    # Subtest: zooms out on Cmd+- and resets on Cmd+0\n    ok 2 - zooms out on Cmd+- and resets on Cmd+0\n      ---\n      duration_ms: 0.06846\n      type: 'test'\n      ...\n    # Subtest: ignores the shortcut without the platform modifier\n    ok 3 - ignores the shortcut without the platform modifier\n      ---\n      duration_ms: 0.095543\n      type: 'test'\n      ...\n    1..3\nok 44 - zoom shortcut\n  ---\n  duration_ms: 1.121148\n  type: 'suite'\n  ...\n1..44\n# tests 263\n# suites 40\n# pass 263\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 3708.881077\n\n> helicon@0.21.2 test\n> node scripts/build.mjs && node --test test/*.test.mjs\n\nbuilt apps/vscode/dist\nTAP version 13\n# Subtest: the bundled server starts, serves the UI and answers the API\nok 1 - the bundled server starts, serves the UI and answers the API\n  ---\n  duration_ms: 56.760897\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 124.099058\n\n> @helicon/web@0.21.2 test\n> tsc -p tsconfig.test.json && node --test \"dist-test/test/*.test.js\"\n\nTAP version 13\n# Subtest: desktop links\n    # Subtest: sends outside web and mail links to the browser\n    ok 1 - sends outside web and mail links to the browser\n      ---\n      duration_ms: 0.522135\n      type: 'test'\n      ...\n    # Subtest: keeps Helicon's own pages and file links in the app\n    ok 2 - keeps Helicon's own pages and file links in the app\n      ---\n      duration_ms: 0.114711\n      type: 'test'\n      ...\n    1..2\nok 1 - desktop links\n  ---\n  duration_ms: 2.243005\n  type: 'suite'\n  ...\n# Subtest: web client\n    # Subtest: takes a token out of the address bar and keeps it\n    ok 1 - takes a token out of the address bar and keeps it\n      ---\n      duration_ms: 1082.64914\n      type: 'test'\n      ...\n    # Subtest: sends the token as a header, never in the path\n    ok 2 - sends the token as a header, never in the path\n      ---\n      duration_ms: 50.869232\n      type: 'test'\n      ...\n    # Subtest: addresses a daemon elsewhere absolutely, and sends its cookie with it\n    ok 3 - addresses a daemon elsewhere absolutely, and sends its cookie with it\n      ---\n      duration_ms: 48.596768\n      type: 'test'\n      ...\n    # Subtest: earns the cookie before opening the stream\n    ok 4 - earns the cookie before opening the stream\n      ---\n      duration_ms: 59.628374\n      type: 'test'\n      ...\n# (node:1566) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time\n# (Use `node --trace-warnings ...` to show where the warning was created)\n    # Subtest: reads and writes the thread-title switch\n    ok 5 - reads and writes the thread-title switch\n      ---\n      duration_ms: 43.846794\n      type: 'test'\n      ...\n    # Subtest: reads and writes the sandbox switch\n    ok 6 - reads and writes the sandbox switch\n      ---\n      duration_ms: 42.633643\n      type: 'test'\n      ...\n    # Subtest: reads and writes the YOLO switch\n    ok 7 - reads and writes the YOLO switch\n      ---\n      duration_ms: 41.392534\n      type: 'test'\n      ...\n    # Subtest: rebuilds a stream that has gone quiet\n    ok 8 - rebuilds a stream that has gone quiet\n      ---\n      duration_ms: 40.454722\n      type: 'test'\n      ...\n    1..8\nok 2 - web client\n  ---\n  duration_ms: 1410.872267\n  type: 'suite'\n  ...\n1..2\n# tests 10\n# suites 2\n# pass 10\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1483.384077\n",
+      "stderrTail": "\n(!) Some chunks are larger than 1200 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\n",
+      "tampered": [],
+      "forbidden": [],
+      "integrity": [],
+      "fingerprint": "git:ea8af964ab9ffb93",
+      "stalled": false
+    }
+  ],
+  "stalls": 0,
+  "result": {
+    "status": "passed",
+    "lap": 1,
+    "metric": null
+  }
+}
