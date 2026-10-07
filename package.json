@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "node scripts/build-adapters.mjs",
-    "test": "node --test test/engine.test.mjs test/loops.test.mjs test/validators.test.mjs test/adapters.test.mjs test/runner.test.mjs",
+    "test": "node --test test/engine.test.mjs test/loops.test.mjs test/validators.test.mjs test/adapters.test.mjs test/runner.test.mjs test/guards.test.mjs test/remove.test.mjs",
     "demo": "node scripts/demo.mjs"
   },
   "keywords": ["claude-code", "codex", "cursor", "agents", "hooks", "loops", "ai-agents"]

@@ -43,8 +43,10 @@ For a repo without TypeScript, pass `--set typecheck="node -e 0"`.
    Upgrade peer dependencies the package now requires.
 3. Run the build, then the type check, then the tests. Fix the first failure, re-run,
    repeat. Use `node .untilship/bin/untilship-check.cjs peek` to run the full stop condition without using a lap.
-4. Fix call sites, not tests. Change a test only when the behaviour it asserts was changed
-   on purpose by the upgrade, and say so in the commit message.
+4. Fix call sites, not tests. Test files that existed at `start` are protected: editing or
+   deleting one fails the lap (adding new test files is fine). If the upgrade changed the
+   behaviour a test asserts on purpose, do not work around it: write it in `blockers.md`.
+   A human can then restart the run with `--set protect_tests=` to allow test edits.
 5. Commit in small steps: the bump, then each class of fix.
 6. End your turn when you believe everything passes. The Stop hook verifies.
 
@@ -55,9 +57,16 @@ All four commands exit 0, in order:
    `node_modules` both satisfy `target`. A downgrade or a no-op does not pass.
 2. build, 3. type check, 4. the full test suite.
 
-Guards that also fail the lap: changing test-runner config, coverage thresholds or
-`tsconfig*.json`; adding `.skip`, `.only`, `@ts-ignore`, `@ts-nocheck` or `eslint-disable`
-anywhere in the code.
+Guards that also fail the lap (full list: `docs/GUARDS.md` in the UntilShip repo):
+- changing test-runner config, coverage thresholds or `tsconfig*.json`;
+- editing or deleting a test file that existed at `start` (new test files are allowed);
+- changing `scripts` in `package.json`, or test-runner config inside it (`jest`, `mocha`,
+  `ava`, `nyc`, `c8`). Dependencies and lockfiles may change;
+- adding a skip, focus or suppression marker anywhere in the code: `.skip`, `.only`,
+  `.todo`, `xit`/`xdescribe`/`xtest`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`,
+  `eslint-disable`, `istanbul`/`c8`/`v8 ignore`, `# pragma: no cover`, `pytest.skip`,
+  `@pytest.mark.skip`, `t.Skip(`, `#[ignore]`, and the like. Markers already in the code
+  before `start` are fine; only new ones count.
 
 ## On blocked
 

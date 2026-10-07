@@ -19,10 +19,43 @@ protect:
   - vitest.config.*
   - playwright.config.*
   - .mocharc*
+protect_existing:
+  - "@tests"
+protect_json:
+  - package.json#scripts.*
+  - package.json#jest
+  - package.json#mocha
+  - package.json#ava
+  - package.json#nyc
+  - package.json#c8
 forbid:
-  - '\b(it|test|describe)\.(skip|only)\('
-  - '\bx(it|describe)\('
+  # test runners: skipped, focused or placeholder tests (it/test/describe/context/suite, incl. .each)
+  - '\b(?:it|test|describe|context|suite|specify|bench)\.(?:skip|only|todo|skipIf|runIf)\b'
+  - '\bx(?:it|test|describe|context|specify)\('
+  - '\bthis\.skip\(\)'
+  # type checker, linter and coverage suppressions
+  - '@ts-ignore'
+  - '@ts-expect-error'
   - '@ts-nocheck'
+  - 'eslint-disable'
+  - 'biome-ignore'
+  - '\b(?:istanbul|c8|v8) ignore\b'
+  # Python
+  - '#\s*pragma:\s*no\s*cover'
+  - '@pytest\.mark\.(?:skip|skipif|xfail)\b'
+  - '\bpytest\.(?:skip|xfail)\('
+  - '@unittest\.(?:skip|skipIf|skipUnless|expectedFailure)\b'
+  - '\.skipTest\('
+  - '#\s*type:\s*ignore'
+  # Go, Rust, JVM/.NET
+  - '\b[tb]\.Skip(?:Now|f)?\('
+  - '#\[ignore\b'
+  - '@(?:Disabled|Ignore)\b'
+  # npm/pnpm: running every package script through a no-op shell
+  - '(?:^|\n)[ \t]*script-shell[ \t]*='
+forbid_in:
+  - '**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,py,rb,go,rs,java,kt,swift,vue,svelte,php,cs}'
+  - '.npmrc'
 ---
 
 # Idea → MVP
@@ -92,8 +125,15 @@ item fails you get the output back and keep going.
 ## Stop when
 
 `node .untilship/loops/idea-to-mvp/checklist.mjs ACCEPTANCE.md` exits 0: every item has a
-check and every check exits 0. Also required: `ACCEPTANCE.md` and test-runner config are
-unchanged since `start`, and no `.skip`/`.only`/`@ts-nocheck` was added.
+check and every check exits 0. Also required (full list: `docs/GUARDS.md` in the UntilShip
+repo):
+- `ACCEPTANCE.md` and test-runner config are unchanged since `start`;
+- test files that existed at `start` are unchanged (new test files are fine);
+- `package.json` scripts that existed at `start` are unchanged (new scripts are fine), and no
+  test-runner config was added to `package.json`;
+- no new skip, focus or suppression marker (`.skip`, `.only`, `.todo`, `xit`, `@ts-ignore`,
+  `@ts-expect-error`, `eslint-disable`, `istanbul ignore`, `# pragma: no cover`,
+  `pytest.skip`, `t.Skip(`, `#[ignore]`, ...) was added.
 
 ## On blocked
 

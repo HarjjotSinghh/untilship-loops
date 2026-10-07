@@ -3,7 +3,7 @@
 import { test, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { appendFileSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, writeFileSync, readFileSync, rmSync, readdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { ROOT, installExample, overlay, hook, check, lastRun, edit, cleanup } from './helpers.mjs';
@@ -81,6 +81,65 @@ describe('dependency-upgrade', () => {
     assert.equal(r.json.decision, 'block');
     assert.match(r.json.reason, /Forbidden shortcuts added/);
     assert.match(r.json.reason, /test\/invoice\.test\.mjs/);
+  });
+});
+
+describe('dependency-upgrade guards', () => {
+  const start = (d, ...extra) => check(d, ['start', 'dependency-upgrade', '--set', 'package=tiny-math', '--set', 'target=^2.0.0',
+    '--set', 'build=node scripts/build.mjs', '--set', 'typecheck=node -e 0', '--set', 'test=npm test --silent', ...extra]);
+  const upgrade = (d) => { overlay('dependency-upgrade', d); edit(join(d, 'package.json'), (s) => s.replace('"tiny-math": "^1.2.0"', '"tiny-math": "^2.0.0"')); };
+
+  test('rewriting the test script in package.json fails the lap; bumping dependencies does not', () => {
+    const d = installExample('dependency-upgrade', 'claude');
+    assert.equal(start(d).status, 0);
+    upgrade(d);
+    edit(join(d, 'package.json'), (s) => s.replace('"test": "node --test test/invoice.test.mjs"', '"test": "node -e 0"'));
+    const r = hook(d, 'claude');
+    assert.equal(r.json.decision, 'block');
+    assert.match(r.json.reason, /package\.json#scripts \(modified\)/);
+    assert.doesNotMatch(r.json.reason, /dependencies/);
+  });
+
+  test('editing an existing test fails; a new test file is fine; --set protect_tests= lifts it', () => {
+    const d = installExample('dependency-upgrade', 'claude');
+    assert.equal(start(d).status, 0);
+    upgrade(d);
+    writeFileSync(join(d, 'test', 'extra.test.mjs'), "import { test } from 'node:test';\ntest('new', () => {});\n");
+    edit(join(d, 'test', 'invoice.test.mjs'), (s) => s + '\n// weakened\n');
+    const r = hook(d, 'claude');
+    assert.equal(r.json.decision, 'block');
+    assert.match(r.json.reason, /test\/invoice\.test\.mjs \(modified\)/);
+    assert.doesNotMatch(r.json.reason, /extra\.test\.mjs/);
+    edit(join(d, 'test', 'invoice.test.mjs'), (s) => s.replace('\n// weakened\n', ''));
+    assert.match(hook(d, 'claude', { stop_hook_active: true }).json.systemMessage, /PASSED/);
+
+    const d2 = installExample('dependency-upgrade', 'claude');
+    assert.equal(start(d2, '--set', 'protect_tests=').status, 0);
+    upgrade(d2);
+    edit(join(d2, 'test', 'invoice.test.mjs'), (s) => s + '\n// updated on purpose\n');
+    assert.match(hook(d2, 'claude').json.systemMessage, /PASSED/);
+  });
+});
+
+describe('idea-to-mvp guards', () => {
+  test('existing tests and scripts are frozen; new scripts are allowed', () => {
+    const d = installExample('idea-to-mvp', 'claude');
+    assert.equal(check(d, ['start', 'idea-to-mvp']).status, 0);
+    overlay('idea-to-mvp', d);
+    edit(join(d, 'package.json'), (s) => { const p = JSON.parse(s); p.scripts = { ...(p.scripts || {}), 'new-script': 'node -e 0' }; return JSON.stringify(p, null, 2); });
+    assert.match(hook(d, 'claude').json.systemMessage, /PASSED/);
+  });
+
+  test('editing a test that existed at start fails the lap', () => {
+    const d = installExample('idea-to-mvp', 'claude');
+    assert.equal(check(d, ['start', 'idea-to-mvp']).status, 0);
+    overlay('idea-to-mvp', d);
+    const testDir = join(d, 'test');
+    const f = readdirSync(testDir, { recursive: true }).map(String).find((x) => /\.m?[jt]s$/.test(x));
+    appendFileSync(join(testDir, f), '\n// edited\n');
+    const r = hook(d, 'claude');
+    assert.equal(r.json.decision, 'block');
+    assert.match(r.json.reason, /\(modified\)/);
   });
 });
 

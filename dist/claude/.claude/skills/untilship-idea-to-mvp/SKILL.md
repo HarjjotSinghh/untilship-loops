@@ -81,8 +81,15 @@ item fails you get the output back and keep going.
 ## Stop when
 
 `node .untilship/loops/idea-to-mvp/checklist.mjs ACCEPTANCE.md` exits 0: every item has a
-check and every check exits 0. Also required: `ACCEPTANCE.md` and test-runner config are
-unchanged since `start`, and no `.skip`/`.only`/`@ts-nocheck` was added.
+check and every check exits 0. Also required (full list: `docs/GUARDS.md` in the UntilShip
+repo):
+- `ACCEPTANCE.md` and test-runner config are unchanged since `start`;
+- test files that existed at `start` are unchanged (new test files are fine);
+- `package.json` scripts that existed at `start` are unchanged (new scripts are fine), and no
+  test-runner config was added to `package.json`;
+- no new skip, focus or suppression marker (`.skip`, `.only`, `.todo`, `xit`, `@ts-ignore`,
+  `@ts-expect-error`, `eslint-disable`, `istanbul ignore`, `# pragma: no cover`,
+  `pytest.skip`, `t.Skip(`, `#[ignore]`, ...) was added.
 
 ## On blocked
 
